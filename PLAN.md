@@ -79,6 +79,7 @@ In practice that means:
 | D2 | Hosting | **Decided and done:** public GitHub repository, https://github.com/Riccaraccio/basilisk-editor |
 | D3 | Name and IDs | **Postponed:** there is no publisher ID yet. Until there is one, the `.vsix` is distributed as a release download; marketplace publishing (part of Phase 3, step 6) waits. The repository name stays `basilisk-editor`. |
 | D4 | Default diagnostics mode | **Decided: `onChange`** (check while typing), changed from `onSave` on 2026-11-24 at the maintainer's request. `onSave` stays available for busy shared machines (project file or editor settings). |
+| D6 | Basilisk for CI | **Open.** basilisk.fr refuses GitHub's runners. Options: (a) keep a copy of the official tarball as a release asset of this repository (GPL allows it; refreshed by hand) and point the `BASILISK_TARBALL_URL` repository variable at it; (b) keep qcc tests local only; (c) ask basilisk.fr's admins to allow GitHub's runners. Recommendation: (a). |
 | D5 | Upstream | Open. Once it has had a beta, consider proposing it to Basilisk's maintainers (a link from basilisk.fr, or shipping it next to `basilisk-mode.el`). |
 
 ## The plan
@@ -158,7 +159,7 @@ New tests: `tests/test_config.py` (9 unit tests: precedence, project files, disc
 - Also changed: the default diagnostics mode is now `onChange` (see D4).
 - CI running `--check` is part of Phase 3.
 
-### Phase 3: tests and CI *(fixes D; in progress, see status)*
+### Phase 3: tests and CI *(fixes D; done, except qcc tests on GitHub, see status)*
 
 1. **Unit tests that need no qcc:**
    - the scanner, against fixture files;
@@ -195,6 +196,13 @@ New tests: `tests/test_config.py` (9 unit tests: precedence, project files, disc
   - editors: neovim 0.11 and stable;
   - full: Basilisk built from the official tarball, cached weekly. A non-blocking step reports when qcc's messages drift from the recorded fixtures.
 - **Release:** `release.yml` builds the `.vsix` with the official `vsce` on a `v*` tag and attaches it to a GitHub release. Marketplace publishing is wired but waits for secrets (D3).
+- **CI on GitHub: all 7 jobs green** (run 45387659909):
+  - unit: Python 3.8 and 3.13, Ubuntu and macOS;
+  - editors: neovim 0.11.0 and stable;
+  - basilisk;
+  - vsix: the official `vsce` builds the extension on every push; the artifact was downloaded and checked to contain the server and `vscode-languageclient`.
+- **Found by CI:** on macOS, errors reported in Basilisk headers showed absolute paths when Basilisk is reached through a symlink (`/var` → `/private/var`). Fixed, with a regression test.
+- **Open, needs a decision (D6):** basilisk.fr doesn't accept connections from GitHub's runners. TCP connections time out, also over IPv4, while it answers normally elsewhere. So the qcc-dependent tests (end-to-end protocol, qcc diagnostics in each editor, the examples corpus, the fixture drift check) run only locally for now. The Basilisk job warns when that happens. The replayed fixtures still test the diagnostics logic on every push. Building Basilisk itself works (`make ast && make qcc`).
 
 ### Phase 4: documentation and more editors *(fixes E)*
 
