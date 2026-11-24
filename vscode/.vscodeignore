@@ -1,0 +1,4 @@
+build.sh
+package_vsix.py
+.gitignore
+.vscodeignore

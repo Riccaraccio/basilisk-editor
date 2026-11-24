@@ -1,0 +1,10 @@
+[
+  {
+    "main": "case.c",
+    "files": [
+      "case.c"
+    ],
+    "returncode": 1,
+    "out": "qcc: error: cannot parse input (missing closing braces?)\n"
+  }
+]

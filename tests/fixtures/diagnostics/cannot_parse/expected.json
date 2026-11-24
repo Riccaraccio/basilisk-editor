@@ -1,0 +1,17 @@
+[
+  {
+    "range": {
+      "start": {
+        "line": 0,
+        "character": 0
+      },
+      "end": {
+        "line": 0,
+        "character": 35
+      }
+    },
+    "severity": 1,
+    "source": "qcc",
+    "message": "cannot parse input (missing closing braces?)"
+  }
+]

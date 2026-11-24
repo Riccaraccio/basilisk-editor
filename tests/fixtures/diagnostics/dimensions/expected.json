@@ -1,0 +1,17 @@
+[
+  {
+    "range": {
+      "start": {
+        "line": 0,
+        "character": 0
+      },
+      "end": {
+        "line": 0,
+        "character": 35
+      }
+    },
+    "severity": 1,
+    "source": "qcc",
+    "message": "the dimensional constraints below are not compatible /src/timestep.h:12: 'dt < dtmax' └─ [ast/interpreter/overload.h:152: 'u.y[] = 0.'] = [1] /src/navier-stokes/centered.h:187: 'u.y[] == Delta/t' └─ [ast/interpreter/overload.h:152: 'u.y[] = 0.'] = [1,-1]  [reported in timestep.h:12]"
+  }
+]

@@ -1,0 +1,11 @@
+[
+  {
+    "main": "_basilisk_lsp_check.c",
+    "files": [
+      "_basilisk_lsp_check.c",
+      "needs.h"
+    ],
+    "returncode": 1,
+    "out": "./needs.h: In function ‘properties’:\n./needs.h:5:1: error: ‘f’ undeclared (first use in this function)\n./needs.h:5:1: note: each undeclared identifier is reported only once for each function it appears in\n./needs.h:5:3: error: expected expression before ‘]’ token\n"
+  }
+]

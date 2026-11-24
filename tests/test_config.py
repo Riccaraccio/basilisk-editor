@@ -99,5 +99,22 @@ class Columns(unittest.TestCase):
         self.assertEqual(b.byte_to_idx(s, s.encode().index(b"x")), s.index("x"))
 
 
+class Launcher(unittest.TestCase):
+    """bin/basilisk-lsp must work through (chains of) symlinks, without
+    GNU tools (readlink -f is missing on older macOS)."""
+
+    def test_through_symlinks(self):
+        import subprocess
+        root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+        tmp = tempfile.mkdtemp()
+        a, c = os.path.join(tmp, "a"), os.path.join(tmp, "sub", "c")
+        os.makedirs(os.path.dirname(c))
+        os.symlink(os.path.abspath(os.path.join(root, "bin", "basilisk-lsp")), a)
+        os.symlink("../a", c)                    # relative link to a link
+        for exe in (a, c):
+            r = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=60)
+            self.assertEqual(r.stdout.strip(), "basilisk-lsp " + b.VERSION, r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

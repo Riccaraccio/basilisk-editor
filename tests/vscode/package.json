@@ -1,0 +1,11 @@
+{
+  "name": "basilisk-c-grammar-test",
+  "private": true,
+  "description": "Tokenizes tests/fixtures/editors/sample.c with the VS Code grammar (as VS Code does) and checks the scopes.",
+  "scripts": { "test": "node test_grammar.js" },
+  "devDependencies": {
+    "tm-grammars": "1.32.22",
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.3.2"
+  }
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "range": {
+      "start": {
+        "line": 5,
+        "character": 4
+      },
+      "end": {
+        "line": 7,
+        "character": 16
+      }
+    },
+    "severity": 2,
+    "source": "qcc",
+    "message": "Basilisk C parse error near `s[] = undefined_var + x foreach_face() uf.x[] = 1.'"
+  },
+  {
+    "range": {
+      "start": {
+        "line": 10,
+        "character": 2
+      },
+      "end": {
+        "line": 10,
+        "character": 21
+      }
+    },
+    "severity": 2,
+    "source": "qcc",
+    "message": "Basilisk C parse error near `double a = s[1,,0]'"
+  },
+  {
+    "range": {
+      "start": {
+        "line": 10,
+        "character": 17
+      },
+      "end": {
+        "line": 10,
+        "character": 18
+      }
+    },
+    "severity": 1,
+    "source": "qcc",
+    "message": "expected expression before ‘,’ token"
+  },
+  {
+    "range": {
+      "start": {
+        "line": 10,
+        "character": 16
+      },
+      "end": {
+        "line": 10,
+        "character": 17
+      }
+    },
+    "severity": 2,
+    "source": "qcc",
+    "message": "left-hand operand of comma expression has no effect [-Wunused-value]"
+  },
+  {
+    "range": {
+      "start": {
+        "line": 10,
+        "character": 14
+      },
+      "end": {
+        "line": 10,
+        "character": 15
+      }
+    },
+    "severity": 1,
+    "source": "qcc",
+    "message": "subscripted value is neither array nor pointer nor vector"
+  },
+  {
+    "range": {
+      "start": {
+        "line": 10,
+        "character": 9
+      },
+      "end": {
+        "line": 10,
+        "character": 10
+      }
+    },
+    "severity": 2,
+    "source": "qcc",
+    "message": "unused variable ‘a’ [-Wunused-variable]"
+  }
+]

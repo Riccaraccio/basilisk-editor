@@ -4,5 +4,6 @@ set -e
 cd "$(dirname "$0")"
 mkdir -p server
 cp ../server/basilisk_lsp.py server/
+cp ../LICENSE .
 npm install --omit=dev --no-audit --no-fund
 python3 package_vsix.py

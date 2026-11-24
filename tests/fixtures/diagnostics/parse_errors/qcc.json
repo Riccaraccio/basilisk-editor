@@ -1,0 +1,10 @@
+[
+  {
+    "main": "case.c",
+    "files": [
+      "case.c"
+    ],
+    "returncode": 1,
+    "out": "case.c:8: warning: Basilisk C parse error near `s[] = undefined_var + x\n  foreach_face()\n    uf.x[] = 1.'\ncase.c:11: warning: Basilisk C parse error near `double a = s[1,,0]'\n$BASILISK/grid/stencils.h: In function ‘init_0’:\n$BASILISK/grid/stencils.h:328:7: error: expected expression before ‘]’ token\n$BASILISK/grid/stencils.h:328:11: error: ‘undefined_var’ undeclared (first use in this function); did you mean ‘undefined’?\n$BASILISK/grid/stencils.h:328:11: note: each undeclared identifier is reported only once for each function it appears in\n$BASILISK/grid/tree.h:447:14: error: expected expression before ‘]’ token\ncase.c: In function ‘foo’:\ncase.c:11:18: error: expected expression before ‘,’ token\ncase.c:11:17: warning: left-hand operand of comma expression has no effect [-Wunused-value]\ncase.c:11:18: warning: left-hand operand of comma expression has no effect [-Wunused-value]\ncase.c:11:15: error: subscripted value is neither array nor pointer nor vector\ncase.c:11:10: warning: unused variable ‘a’ [-Wunused-variable]\n"
+  }
+]

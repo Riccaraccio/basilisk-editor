@@ -1,0 +1,65 @@
+name: Release
+
+# On a version tag (v0.1.0, ...): builds the VS Code extension with the
+# official packager and attaches it to a GitHub release. Run by hand
+# (workflow_dispatch) to only build it, as a downloadable artifact.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  vsix:
+    runs-on: ubuntu-24.04
+    env:
+      # empty unless the repository has these secrets (see the last steps)
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Generated files are up to date
+        run: python3 tools/generate.py --check
+      - name: Version
+        id: version
+        run: |
+          v=$(python3 -c "import re; print(re.search(r'^VERSION = \"(.+)\"', open('server/basilisk_lsp.py').read(), re.M).group(1))")
+          test "$v" = "$(node -p "require('./vscode/package.json').version")"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            test "v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME does not match version $v"; exit 1; }
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Build the extension
+        working-directory: vscode
+        run: |
+          mkdir -p server
+          cp ../server/basilisk_lsp.py server/
+          cp ../LICENSE .
+          npm ci --omit=dev
+          npx --yes @vscode/vsce@3 package
+          unzip -l basilisk-c-*.vsix | grep -E 'extension/(server/basilisk_lsp.py|extension.js|LICENSE)'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: basilisk-c-${{ steps.version.outputs.version }}
+          path: vscode/basilisk-c-*.vsix
+      - name: GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" vscode/basilisk-c-*.vsix --title "$GITHUB_REF_NAME" --generate-notes
+      # Marketplace publishing (decision D3: postponed until there is a
+      # publisher ID). Add the VSCE_PAT / OVSX_PAT secrets to enable.
+      - name: VS Code Marketplace
+        if: github.ref_type == 'tag' && env.VSCE_PAT != ''
+        working-directory: vscode
+        run: npx --yes @vscode/vsce@3 publish --packagePath basilisk-c-*.vsix
+      - name: Open VSX
+        if: github.ref_type == 'tag' && env.OVSX_PAT != ''
+        working-directory: vscode
+        run: npx --yes ovsx publish basilisk-c-*.vsix

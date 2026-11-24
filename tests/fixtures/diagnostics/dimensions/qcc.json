@@ -1,0 +1,10 @@
+[
+  {
+    "main": "case.c",
+    "files": [
+      "case.c"
+    ],
+    "returncode": 2,
+    "out": "$BASILISK/timestep.h:12: error: the dimensional constraints below are not compatible\n/src/timestep.h:12: 'dt < dtmax'\n\t└─ [ast/interpreter/overload.h:152: 'u.y[] = 0.'] = [1]\n/src/navier-stokes/centered.h:187: 'u.y[] == Delta/t'\n\t└─ [ast/interpreter/overload.h:152: 'u.y[] = 0.'] = [1,-1]\n"
+  }
+]

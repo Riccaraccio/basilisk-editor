@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Server, generator and diagnostics tests (no qcc needed: recorded
+  # outputs are replayed), on the oldest and newest supported Pythons and
+  # on macOS. Editor and Basilisk tests skip themselves here.
+  unit:
+    name: unit (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, python: "3.8" }
+          - { os: ubuntu-24.04, python: "3.13" }
+          - { os: macos-latest, python: "3.13" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Generated files are up to date
+        run: python tools/generate.py --check
+      - name: Versions agree
+        run: |
+          server=$(python -c "import re; print(re.search(r'^VERSION = \"(.+)\"', open('server/basilisk_lsp.py').read(), re.M).group(1))")
+          vscode=$(python -c "import json; print(json.load(open('vscode/package.json'))['version'])")
+          el=$(sed -n 's/^;; Version: //p' basilisk-editor.el)
+          echo "server $server, vscode $vscode, emacs $el"
+          test "$server" = "$vscode" && test "$server" = "$el"
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+
+  # Editors without Basilisk: detection, highlighting, language server
+  # attach and hover (qcc-free parts), on neovim 0.11 and stable.
+  editors:
+    name: editors (neovim ${{ matrix.nvim }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        nvim: [v0.11.0, stable]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install vim, Emacs, nano, tmux
+        run: sudo apt-get update && sudo apt-get install -y vim emacs-nox nano tmux
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.nvim }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: VS Code grammar
+        working-directory: tests/vscode
+        run: npm ci && npm test
+      - name: Editor tests
+        run: python3 -m unittest tests.test_editors tests.test_generate -v
+
+  # Everything, with a real Basilisk (official tarball, rebuilt weekly):
+  # qcc diagnostics in every editor, end-to-end protocol test, Basilisk's
+  # sources and examples as a corpus.
+  basilisk:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install vim, Emacs, nano, tmux
+        run: sudo apt-get update && sudo apt-get install -y vim emacs-nox nano tmux
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - name: Week
+        id: week
+        run: echo "week=$(date +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Cache Basilisk
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/basilisk
+          key: basilisk-${{ runner.os }}-${{ steps.week.outputs.week }}
+      - name: Build Basilisk (qcc)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          cd ~
+          wget -q https://basilisk.fr/basilisk/basilisk.tar.gz
+          tar xzf basilisk.tar.gz
+          cd basilisk/src
+          ln -s config.gcc config
+          make -k qcc || make qcc
+          ./qcc --version || true
+      - name: Basilisk environment
+        run: |
+          echo "BASILISK=$HOME/basilisk/src" >> "$GITHUB_ENV"
+          echo "$HOME/basilisk/src" >> "$GITHUB_PATH"
+      - name: Tests (all, including the slow corpus test)
+        env:
+          BASILISK_LSP_SLOW: "1"
+        run: python3 -m unittest discover -s tests -v
+      - name: Recorded qcc outputs still match this Basilisk
+        # informative: when qcc's messages change upstream, re-record with
+        # tests/record_fixtures.py and review the expected.json changes
+        continue-on-error: true
+        run: |
+          python3 tests/record_fixtures.py
+          git diff --stat --exit-code tests/fixtures

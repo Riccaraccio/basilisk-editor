@@ -1,0 +1,10 @@
+[
+  {
+    "main": "drop.c",
+    "files": [
+      "drop.c"
+    ],
+    "returncode": 1,
+    "out": "$CASE/myforce.h: In function ‘acceleration_0’:\n$CASE/myforce.h:6:25: error: ‘undefined_g’ undeclared (first use in this function); did you mean ‘undefined’?\n$CASE/myforce.h:6:25: note: each undeclared identifier is reported only once for each function it appears in\n"
+  }
+]

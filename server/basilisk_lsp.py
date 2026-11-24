@@ -784,6 +784,66 @@ SEV = {"error": 1, "fatal error": 1, "warning": 2, "note": 3}
 GENERIC_RE = re.compile(r"^(?:qcc|cc|gcc|cc1|ld|collect2): (fatal error|error|warning): (.*)$")
 
 
+# Test hooks: QCC_RECORD(files, main, out, returncode, tmp) is called after
+# each qcc run; QCC_REPLAY(files, main, tmp) -> (out, returncode) replaces
+# running qcc (see tests/fixtures/diagnostics).
+QCC_RECORD = None
+QCC_REPLAY = None
+
+
+def resolve_reported(f, tmp, files, idirs):
+    """Maps a file name reported by qcc/gcc to the real file."""
+    n = os.path.normpath(os.path.join(tmp, f) if not os.path.isabs(f) else f)
+    rel = os.path.relpath(n, tmp)
+    if rel in files:
+        return files[rel][1] or f
+    if not os.path.isabs(f):
+        for d in idirs:
+            p = os.path.join(d, f)
+            if os.path.isfile(p):
+                return os.path.realpath(p)
+    return os.path.realpath(f) if os.path.isabs(f) else f
+
+
+def parse_qcc_output(out, returncode, resolve, target):
+    """qcc/gcc output -> list of [file, line, col, sev, msg, ctx].
+    `resolve` maps reported file names to real files; errors without a
+    location (e.g. "qcc: error: cannot parse input") go to `target`."""
+    raw, ctx, last = [], None, None
+    for l in out.splitlines():
+        m = CTX_RE.match(l)
+        if m:
+            ctx = m.group("fn")
+            last = None
+            continue
+        m = DIAG_RE.match(l)
+        if m:
+            last = [resolve(m.group("file")), int(m.group("line")),
+                    int(m.group("col")) if m.group("col") else None,
+                    m.group("sev"), m.group("msg"), ctx]
+            raw.append(last)
+            continue
+        m = GENERIC_RE.match(l)
+        if m:
+            last = [target, 1, None, m.group(1), m.group(2), None]
+            raw.append(last)
+            continue
+        if (l.startswith("In file included") or re.match(r"^\s+from ", l)
+                or re.match(r"^[^:]+: At top level:", l)
+                or re.match(r"^\s*\d*\s*\|", l) or l.startswith("compilation terminated")):
+            last = None
+            continue
+        if last is not None and l.strip():
+            last[4] += "\n" + l   # continuation (e.g. qcc parse error snippets)
+    if returncode and not any(r[3] in ("error", "fatal error") for r in raw):
+        # failed, but nothing we recognised: never report a clean file
+        tail = [l for l in out.splitlines() if l.strip()][-3:]
+        raw.append([target, 1, None, "error",
+                    f"qcc failed (exit status {returncode})" +
+                    (": " + " / ".join(tail) if tail else ""), None])
+    return raw
+
+
 def run_qcc(cfg, files, main, idir, procs=None, key=None):
     """Runs `qcc -fsyntax-only main` in a temporary directory holding
     `files` ({name: (text, real path or None)}), with -I`idir`.
@@ -797,75 +857,35 @@ def run_qcc(cfg, files, main, idir, procs=None, key=None):
     flags = list(cfg["flags"])
     tmp = tempfile.mkdtemp(prefix="basilisk-lsp-")
     idirs = [idir] + cfg["idirs"] + [cfg["root"]]
-
-    def real(f):
-        """Maps a file name reported by qcc/gcc to the real file."""
-        n = os.path.normpath(os.path.join(tmp, f) if not os.path.isabs(f) else f)
-        rel = os.path.relpath(n, tmp)
-        if rel in files:
-            return files[rel][1] or f
-        if not os.path.isabs(f):
-            for d in idirs:
-                p = os.path.join(d, f)
-                if os.path.isfile(p):
-                    return os.path.realpath(p)
-        return os.path.realpath(f) if os.path.isabs(f) else f
-
     try:
         for name, (text, _) in files.items():
             with open(os.path.join(tmp, name), "w", encoding="utf-8") as f:
                 f.write(text)
-        env = dict(os.environ)
-        env["BASILISK"] = cfg["root"]
-        env["PATH"] = os.path.dirname(qcc) + os.pathsep + env.get("PATH", "")
-        cmd = [qcc] + flags + ["-fsyntax-only", "-I" + idir, main]
-        p = subprocess.Popen(cmd, cwd=tmp, env=env, stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
-        if procs is not None:
-            procs[key] = p
-        try:
-            out, _ = p.communicate(timeout=120)
-        except subprocess.TimeoutExpired:
-            p.kill()
-            out, _ = p.communicate()
-        out = out.decode("utf-8", errors="replace")
-        if p.returncode is not None and p.returncode < 0:
-            return None, None   # killed (superseded)
-        # errors without a location (e.g. "qcc: error: cannot parse input")
-        # belong to the file being checked
+        if QCC_REPLAY:
+            out, returncode = QCC_REPLAY(files, main, tmp)
+        else:
+            env = dict(os.environ)
+            env["BASILISK"] = cfg["root"]
+            env["PATH"] = os.path.dirname(qcc) + os.pathsep + env.get("PATH", "")
+            cmd = [qcc] + flags + ["-fsyntax-only", "-I" + idir, main]
+            p = subprocess.Popen(cmd, cwd=tmp, env=env, stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+            if procs is not None:
+                procs[key] = p
+            try:
+                out, _ = p.communicate(timeout=120)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                out, _ = p.communicate()
+            out = out.decode("utf-8", errors="replace")
+            returncode = p.returncode
+            if returncode is not None and returncode < 0:
+                return None, None   # killed (superseded)
+            if QCC_RECORD:
+                QCC_RECORD(files, main, out, returncode, tmp)
         target = files[main][1] or next((r for _, r in files.values() if r), main)
-        raw, ctx, last = [], None, None
-        for l in out.splitlines():
-            m = CTX_RE.match(l)
-            if m:
-                ctx = m.group("fn")
-                last = None
-                continue
-            m = DIAG_RE.match(l)
-            if m:
-                last = [real(m.group("file")), int(m.group("line")),
-                        int(m.group("col")) if m.group("col") else None,
-                        m.group("sev"), m.group("msg"), ctx]
-                raw.append(last)
-                continue
-            m = GENERIC_RE.match(l)
-            if m:
-                last = [target, 1, None, m.group(1), m.group(2), None]
-                raw.append(last)
-                continue
-            if (l.startswith("In file included") or re.match(r"^\s+from ", l)
-                    or re.match(r"^[^:]+: At top level:", l)
-                    or re.match(r"^\s*\d*\s*\|", l) or l.startswith("compilation terminated")):
-                last = None
-                continue
-            if last is not None and l.strip():
-                last[4] += "\n" + l   # continuation (e.g. qcc parse error snippets)
-        if p.returncode and not any(r[3] in ("error", "fatal error") for r in raw):
-            # failed, but nothing we recognised: never report a clean file
-            tail = [l for l in out.splitlines() if l.strip()][-3:]
-            raw.append([target, 1, None, "error",
-                        f"qcc failed (exit status {p.returncode})" +
-                        (": " + " / ".join(tail) if tail else ""), None])
+        raw = parse_qcc_output(out, returncode,
+                               lambda f: resolve_reported(f, tmp, files, idirs), target)
         return raw, None
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -1,0 +1,10 @@
+[
+  {
+    "main": "case.c",
+    "files": [
+      "case.c"
+    ],
+    "returncode": 1,
+    "out": "case.c: In function ‘init_0’:\ncase.c:9:28: error: ‘undefined_var’ undeclared (first use in this function); did you mean ‘undefined’?\ncase.c:9:28: note: each undeclared identifier is reported only once for each function it appears in\n"
+  }
+]

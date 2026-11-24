@@ -1,0 +1,32 @@
+[
+  {
+    "range": {
+      "start": {
+        "line": 5,
+        "character": 24
+      },
+      "end": {
+        "line": 5,
+        "character": 30
+      }
+    },
+    "severity": 1,
+    "source": "qcc",
+    "message": "‘undefined_g’ undeclared (first use in this function); did you mean ‘undefined’?"
+  },
+  {
+    "range": {
+      "start": {
+        "line": 5,
+        "character": 24
+      },
+      "end": {
+        "line": 5,
+        "character": 30
+      }
+    },
+    "severity": 3,
+    "source": "qcc",
+    "message": "each undeclared identifier is reported only once for each function it appears in"
+  }
+]

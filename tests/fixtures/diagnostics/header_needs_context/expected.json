@@ -1,0 +1,17 @@
+[
+  {
+    "range": {
+      "start": {
+        "line": 0,
+        "character": 0
+      },
+      "end": {
+        "line": 0,
+        "character": 0
+      }
+    },
+    "severity": 3,
+    "source": "qcc",
+    "message": "This header does not compile on its own (2 errors, e.g. line 5: ‘f’ undeclared (first use in this function)). It probably needs other headers included before it: open (or create, in this directory) a .c file which includes it to check it in context."
+  }
+]

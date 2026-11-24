@@ -10,7 +10,7 @@ server_src = open(os.path.join(here, "..", "server", "basilisk_lsp.py")).read()
 m = re.search(r'^VERSION = "([^"]+)"', server_src, re.M)
 if not m or m.group(1) != pkg["version"]:
     sys.exit(f"version mismatch: server {m and m.group(1)} vs vscode/package.json {pkg['version']}")
-skip_top = {"build.sh", "package_vsix.py", ".gitignore", ".vscodeignore"}
+skip_top = {"build.sh", "package_vsix.py", ".gitignore", ".vscodeignore", "package-lock.json"}
 
 files = []
 for d, dirs, fs in os.walk(here):
