@@ -1,0 +1,7 @@
+{
+  "basilisk-lsp": {
+    "enabled": true,
+    "command": ["/path/to/basilisk-editor/bin/basilisk-lsp"],
+    "selector": "source.c"
+  }
+}

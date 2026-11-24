@@ -33,11 +33,10 @@ git clone https://github.com/Riccaraccio/basilisk-editor ~/.local/share/nvim/sit
 ```
 
 - **Neovim:** the language server is enabled automatically for Basilisk files. Your `LspAttach` keymaps and completion plugin apply to it like any other server.
-- **Vim:** there's no built-in LSP client. [vim-lsp](https://github.com/prabirshrestha/vim-lsp) is configured automatically. Without an LSP plugin, `:make` checks the file with qcc and fills the quickfix list (`:copen`).
-- **coc.nvim:** add to `coc-settings.json`:
-  ```json
-  "languageserver": { "basilisk": { "command": "/path/to/basilisk-editor/bin/basilisk-lsp", "filetypes": ["basilisk"] } }
-  ```
+- **Vim:** there's no built-in LSP client.
+  - [vim-lsp](https://github.com/prabirshrestha/vim-lsp) and [ALE](https://github.com/dense-analysis/ale) are configured automatically.
+  - [coc.nvim](https://github.com/neoclide/coc.nvim): merge [`editors/coc/coc-settings.json`](editors/coc/coc-settings.json) into yours, with the real path.
+  - Without an LSP plugin, `:make` checks the file with qcc and fills the quickfix list (`:copen`).
 
 ### Emacs (≥ 29)
 
@@ -78,6 +77,21 @@ On Windows, use VS Code with WSL, because Basilisk runs in WSL. Install the exte
 ```
 
 This adds an `include` line to `~/.nanorc` and links `basilisk-lsp` into `~/.local/bin`, which must be on your `PATH`. In nano, press `^T` then `^Y` to check the file; `^Y` and `^V` step through the messages.
+
+### Other editors
+
+Any editor with an LSP client can use the server: it is `bin/basilisk-lsp`, speaking LSP over stdio. These editors can't recognise Basilisk files by content, so the configurations attach the server to **C files**. That's best done per project, so your other C files keep clangd.
+
+| Editor | Configuration | Status |
+|---|---|---|
+| [Helix](https://helix-editor.com) | Copy [`editors/helix/languages.toml`](editors/helix/languages.toml) to `.helix/languages.toml` in your project. Needs `./install.sh bin`. | untested |
+| [Sublime Text](https://www.sublimetext.com) (with the [LSP](https://lsp.sublimetext.io) package) | [`editors/sublime/LanguageServers.sublime-settings`](editors/sublime/LanguageServers.sublime-settings) in `Packages/User`; to replace clangd in a project, [`basilisk.sublime-project`](editors/sublime/basilisk.sublime-project). | untested |
+| [Kate](https://kate-editor.org) | *Settings → LSP Client → User Server Settings*: [`editors/kate/lspclient-settings.json`](editors/kate/lspclient-settings.json). This applies to all C files. Needs `./install.sh bin`. | untested |
+| coc.nvim | [`editors/coc/coc-settings.json`](editors/coc/coc-settings.json) | untested |
+| ALE | automatic (`ale_linters/basilisk/`) | tested against a stand-in for ALE's API, not ALE itself |
+| Zed | not supported yet: Zed needs an extension to add a language server | – |
+
+"Untested" means written from the editor's documentation and checked for syntax and structure (`tests/test_snippets.py`), but not yet tried in the editor. If you use one of these, please [report](https://github.com/Riccaraccio/basilisk-editor/issues) whether it works.
 
 ## Configuration
 
@@ -147,46 +161,9 @@ Basilisk sources are ordinary `.c`/`.h` files, so vim, Emacs and VS Code recogni
 
 ## Development
 
-```
-plugin/ ftdetect/ syntax/ ftplugin/ indent/ compiler/   vim/neovim plugin
-basilisk-editor.el         Emacs package
-spec/language.json         single source of keywords, file detection, built-in docs
-tools/generate.py          writes them into the editor files (--check: verify)
-bin/basilisk-lsp           launcher (POSIX sh)
-server/basilisk_lsp.py     language server, --lint, --config
-nano/basilisk.nanorc
-vscode/                    extension; build.sh builds the .vsix (no Node 20 needed)
-tests/                     test suite (see below); fixtures/ holds the test cases
-.github/workflows/         ci.yml (every push and pull request), release.yml (v* tags)
-install.sh                 optional installer (bin, vim, nvim, nano, vscode)
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md): the layout, the ground rules, how to run the tests (with Basilisk installed, run the full suite before pushing), how to add a diagnostics case, and how to release. Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the roadmap is in [PLAN.md](PLAN.md).
 
-To add or change a keyword, built-in or its documentation, edit `spec/language.json` and run `python3 tools/generate.py`. Don't edit the `GENERATED … END GENERATED` blocks by hand.
-
-**Tests.** Run them all with:
-
-```sh
-python3 -m unittest discover -s tests            # add BASILISK_LSP_SLOW=1 to also lint all of src/examples
-cd tests/vscode && npm ci && npm test            # VS Code grammar
-```
-
-Tests that need Basilisk, or a particular editor, skip themselves when it isn't installed. Diagnostics are tested without qcc by replaying recorded qcc runs (`tests/fixtures/diagnostics`).
-
-**With Basilisk installed, run the full suite locally before pushing.** GitHub's CI can't download Basilisk (basilisk.fr refuses its servers), so these tests only run on your machine:
-- the end-to-end protocol test;
-- qcc errors in vim, neovim, Emacs and nano;
-- Basilisk's sources and examples as a corpus.
-
-```sh
-BASILISK_LSP_SLOW=1 python3 -m unittest discover -s tests     # $BASILISK set, or qcc on PATH
-python3 tests/record_fixtures.py && git diff --stat tests/fixtures   # did qcc's messages change?
-```
-
-After changing the diagnostics cases, or when qcc's messages change, re-record them with `python3 tests/record_fixtures.py` and review the diff of `expected.json`.
-
-**Releases.** Bump the version in `server/basilisk_lsp.py`, `vscode/package.json` and `basilisk-editor.el` (CI checks they agree), then push a `vX.Y.Z` tag. The release workflow builds the `.vsix` and attaches it to a GitHub release.
-
-See [PLAN.md](PLAN.md) for the roadmap.
+In short: to add or change a keyword, built-in or its documentation, edit `spec/language.json` and run `python3 tools/generate.py`. Run the tests with `python3 -m unittest discover -s tests`.
 
 ## License
 

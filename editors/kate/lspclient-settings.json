@@ -1,0 +1,15 @@
+{
+  "servers": {
+    "c": {
+      "highlightingModeRegex": "^(C|ANSI C89)$",
+      "servers": {
+        "clangd": { "disabled": true },
+        "basilisk-lsp": {
+          "command": ["basilisk-lsp"],
+          "url": "https://github.com/Riccaraccio/basilisk-editor",
+          "rootIndicationFileNames": [".basilisk-lsp.json", "Makefile", ".git"]
+        }
+      }
+    }
+  }
+}

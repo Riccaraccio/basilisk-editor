@@ -1,0 +1,16 @@
+# Helix: Basilisk C language server for the C files of a project.
+#
+# Copy this file to <your Basilisk project>/.helix/languages.toml, so only
+# that project's .c/.h files use it (Helix can't tell Basilisk C from C by
+# content). `basilisk-lsp` must be on PATH: run `./install.sh bin`.
+# Highlighting stays Helix's C highlighting.
+# Check with: hx --health c
+#
+# Untested so far (written from the Helix documentation): please report.
+
+[language-server.basilisk-lsp]
+command = "basilisk-lsp"
+
+[[language]]
+name = "c"
+language-servers = ["basilisk-lsp"]

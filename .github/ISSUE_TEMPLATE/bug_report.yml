@@ -1,0 +1,46 @@
+name: Bug report
+description: Something doesn't work (wrong or missing errors, highlighting, completion, crashes...)
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks! The details below let us reproduce the problem.
+  - type: dropdown
+    id: editor
+    attributes:
+      label: Editor
+      options: [VS Code, Neovim, Vim, Emacs, Nano, Helix, Sublime Text, Kate, Other]
+    validations:
+      required: true
+  - type: input
+    id: editor-version
+    attributes:
+      label: Editor version and LSP plugin (if any)
+      placeholder: e.g. Neovim 0.11.2 with lazy.nvim; Vim 9.1 with vim-lsp; VS Code 1.147 (WSL)
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Output of `basilisk-lsp --version` and `basilisk-lsp --config your-file.c`
+      description: Run from the repository (`bin/basilisk-lsp`) if it's not on your PATH. Shows where Basilisk and qcc were found and the settings in effect.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: file
+    attributes:
+      label: A minimal file that shows it
+      description: As short as possible. If it's about errors, also paste the output of `basilisk-lsp --lint your-file.c`.
+      render: c
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: e.g. Ubuntu 24.04, macOS 15, Windows 11 + WSL2

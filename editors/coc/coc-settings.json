@@ -1,0 +1,9 @@
+{
+  "languageserver": {
+    "basilisk": {
+      "command": "/path/to/basilisk-editor/bin/basilisk-lsp",
+      "filetypes": ["basilisk"],
+      "rootPatterns": [".basilisk-lsp.json", "Makefile", ".git"]
+    }
+  }
+}

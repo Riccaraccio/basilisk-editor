@@ -209,7 +209,7 @@ New tests: `tests/test_config.py` (9 unit tests: precedence, project files, disc
 
   The neovim and Emacs tests also check qcc diagnostics when run locally. The README says to run the full suite before pushing. The Basilisk CI job was removed, since it could never download Basilisk.
 
-### Phase 4: documentation and more editors *(fixes E)*
+### Phase 4: documentation and more editors *(fixes E; done)*
 
 1. **README rewrite:**
    - a quick start per editor, one short section each;
@@ -223,6 +223,13 @@ New tests: `tests/test_config.py` (9 unit tests: precedence, project files, disc
    - coc.nvim and ALE.
 3. `CONTRIBUTING.md` (layout, the generator, running tests), `CHANGELOG.md`, and an issue template that asks for the editor, its version, `basilisk-lsp --version`, `qcc` location and a minimal file.
 
+**Status (2026-11-24): done.**
+- **Editor configurations** in `editors/`: Helix (project-local `.helix/languages.toml`), Sublime Text (LSP package, with a project file replacing clangd), Kate, and coc.nvim. They follow each editor's official documentation. **None of these editors is installed here** (Kate needs sudo), so they're marked "untested" in the README. `tests/test_snippets.py` checks that they parse, have the documented structure, and start `basilisk-lsp`.
+- **ALE:** `ale_linters/basilisk/basilisk_lsp.vim` registers the server automatically. It's tested by loading it in vim against a stand-in for ALE's API (filetype, stdio, bundled launcher, project root), not in ALE itself.
+- **Zed:** not supported. Its documentation only lets settings change the binary of language servers Zed or an extension already knows, so a new server needs a Zed extension. Moved to Phase 6.
+- **README:** a quick start per editor; an "Other editors" table with an honest status per editor; development details moved to `CONTRIBUTING.md`.
+- `CONTRIBUTING.md`, `CHANGELOG.md` (everything so far under Unreleased, to become 0.1.0), and two GitHub issue forms. The bug report asks for the editor, its version, `basilisk-lsp --version` and `--config`, a minimal file and the OS. The "editor report" lets users confirm the untested configurations, which feeds the Phase 5 beta.
+
 ### Phase 5: beta with real users, then announce
 
 1. Two or three Basilisk users, covering Linux, macOS, WSL and at least one cluster login node. Fix what they find.
@@ -235,7 +242,8 @@ Discussed in detail earlier; listed here so they aren't lost:
 - signature help (cheap);
 - semantic tokens: field-aware highlighting, including `u.x` in VS Code (cheap);
 - a tree-sitter grammar for Basilisk, which brings local variables, struct members, find-references, and rename that understands `foreach_dimension`. It needs the packaging decision: Python plus the tree-sitter package, Node with WebAssembly, or a Rust binary;
-- checking unsaved header edits in context.
+- checking unsaved header edits in context;
+- a Zed extension (Zed can't attach a custom language server through settings alone).
 
 ## Target layout after phases 1–3
 

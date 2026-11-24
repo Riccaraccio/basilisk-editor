@@ -1,0 +1,9 @@
+{
+  "folders": [{ "path": "." }],
+  "settings": {
+    "LSP": {
+      "basilisk-lsp": { "enabled": true },
+      "clangd": { "enabled": false }
+    }
+  }
+}
