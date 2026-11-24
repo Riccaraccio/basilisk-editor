@@ -66,7 +66,7 @@ Basilisk's own `basilisk-mode.el`, which shows the literate comments as markdown
 
 ### VS Code (also VSCodium and Cursor)
 
-Build and install the extension with `./install.sh vscode` (needs npm, any Node version). Ready-made `.vsix` files will be attached to the [releases](https://github.com/Riccaraccio/basilisk-editor/releases) from the first release on; install one with `code --install-extension basilisk-c-*.vsix`.
+Download `basilisk-c-*.vsix` from the latest [release](https://github.com/Riccaraccio/basilisk-editor/releases/latest), then run `code --install-extension basilisk-c-*.vsix`, or use *Extensions → … → Install from VSIX*. To build it yourself instead, run `./install.sh vscode` (needs npm, any Node version).
 
 On Windows, use VS Code with WSL, because Basilisk runs in WSL. Install the extension from a WSL terminal so that it runs next to `qcc`.
 
