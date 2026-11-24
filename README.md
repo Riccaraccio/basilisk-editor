@@ -1,12 +1,14 @@
 # Basilisk C editor support
 
-Editor support for [Basilisk C](http://basilisk.fr) in **vim**, **neovim**, **nano** and **VS Code**.
+> **Disclaimer:** this project is mostly developed with the help of [Claude](https://claude.ai), Anthropic's AI assistant, under the direction and review of its maintainer. It is tested (see `tests/`), but please report anything that looks wrong.
 
-| Feature | VS Code | Neovim ≥ 0.11 | Vim | Nano |
-|---|---|---|---|---|
-| Highlighting (foreach, events, fields, `/** markdown */` docs) | ✓ | ✓ | ✓ | ✓ |
-| qcc errors | ✓ | ✓ | with an LSP plugin; `:make` otherwise | `^T ^Y` |
-| Completion, hover docs, go to definition, outline | ✓ | ✓ | with an LSP plugin | – |
+Editor support for [Basilisk C](http://basilisk.fr) in **vim**, **neovim**, **Emacs**, **nano** and **VS Code**.
+
+| Feature | VS Code | Neovim ≥ 0.11 | Emacs ≥ 29 | Vim | Nano |
+|---|---|---|---|---|---|
+| Highlighting (foreach, events, fields, `/** markdown */` docs) | ✓ | ✓ | ✓ (no markdown in comments) | ✓ | ✓ |
+| qcc errors | ✓ | ✓ | ✓ (eglot/flymake) | with an LSP plugin; `:make` otherwise | `^T ^Y` |
+| Completion, hover docs, go to definition, outline | ✓ | ✓ | ✓ (eglot or lsp-mode) | with an LSP plugin | – |
 
 **Requirements:** Python ≥ 3.8 and a working Basilisk install (`qcc`). Nothing else: the language server uses only Python's standard library, and it ships inside the plugin and the extension.
 
@@ -36,6 +38,32 @@ git clone https://github.com/Riccaraccio/basilisk-editor ~/.local/share/nvim/sit
   ```json
   "languageserver": { "basilisk": { "command": "/path/to/basilisk-editor/bin/basilisk-lsp", "filetypes": ["basilisk"] } }
   ```
+
+### Emacs (≥ 29)
+
+```elisp
+;; Emacs 30:
+(use-package basilisk-editor
+  :vc (:url "https://github.com/Riccaraccio/basilisk-editor"))
+
+;; Emacs 29: run once
+;;   M-x package-vc-install RET https://github.com/Riccaraccio/basilisk-editor RET
+
+;; Or from a clone:
+(add-to-list 'load-path "/path/to/basilisk-editor")
+(require 'basilisk-editor)
+```
+
+What you get:
+- Basilisk `.c`/`.h` files open in `basilisk-c-mode`, which is `c-mode` plus Basilisk keywords.
+- The language server starts through **eglot**, built into Emacs 29, which shows qcc errors with flymake. `M-x eldoc` and hover give documentation, and `M-.` goes to definitions.
+- `M-x compile` runs the qcc check.
+
+Options (`M-x customize-group RET basilisk`):
+- `basilisk-auto-lsp`: `eglot` (default), `lsp-mode` or `nil`.
+- `basilisk-lsp-options`: e.g. `(:diagnostics "onChange")`.
+
+Basilisk's own `basilisk-mode.el`, which shows the literate comments as markdown, also works with the language server: run `M-x eglot` in it.
 
 ### VS Code (also VSCodium and Cursor)
 
@@ -78,6 +106,7 @@ The same settings can also be given in the editor, where the project file takes 
 - **neovim:** `vim.g.basilisk_lsp_options = { diagnostics = "onChange" }`
 - **vim-lsp:** `g:basilisk_lsp_options`
 - **VS Code:** `basilisk.*` settings, with `basilisk.path` for `basiliskPath`
+- **Emacs:** `basilisk-lsp-options`, e.g. `(:diagnostics "onChange")`
 
 **Finding Basilisk.** The server tries, in order: `basiliskPath`, then `$BASILISK`, then the directory of `qcc` on `PATH`, then common locations (`~/basilisk/src`, `~/basilisk/basilisk/src`, `/usr/local/basilisk/src`, `/opt/basilisk/src`). qcc doesn't have to be on `PATH` if it is in that directory. Editors started from a desktop menu often don't see your shell's `$BASILISK`; set `basiliskPath` if Basilisk isn't found.
 
@@ -89,9 +118,10 @@ bin/basilisk-lsp --config path/to/case.c
 
 ## How files are recognised
 
-Basilisk sources are ordinary `.c`/`.h` files, so vim and VS Code recognise them by their content: an `event`, a `foreach`, a `scalar s[]` declaration, or a Basilisk `#include`. Plain C files keep C mode. To override:
+Basilisk sources are ordinary `.c`/`.h` files, so vim, Emacs and VS Code recognise them by their content: an `event`, a `foreach`, a `scalar s[]` declaration, or a Basilisk `#include`. Plain C files keep C mode. To override:
 
 - **vim/neovim:** `:set ft=basilisk`
+- **Emacs:** `M-x basilisk-c-mode`
 - **VS Code:** run *Basilisk: Treat this file as Basilisk C*
 - **nano:** nano can't look at file contents, so it uses the Basilisk syntax for every `.c`/`.h` file. Since Basilisk C is a superset of C, plain C files still look right.
 
@@ -119,6 +149,7 @@ Basilisk sources are ordinary `.c`/`.h` files, so vim and VS Code recognise them
 
 ```
 plugin/ ftdetect/ syntax/ ftplugin/ indent/ compiler/   vim/neovim plugin
+basilisk-editor.el         Emacs package
 bin/basilisk-lsp           launcher (POSIX sh)
 server/basilisk_lsp.py     language server, --lint, --config
 nano/basilisk.nanorc

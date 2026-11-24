@@ -3,3 +3,6 @@ __pycache__/
 *.vsix
 vscode/node_modules/
 vscode/server/
+*.elc
+*-autoloads.el
+*-pkg.el

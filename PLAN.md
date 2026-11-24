@@ -54,7 +54,7 @@ In practice that means:
 ### C. Maintainability: the same knowledge copied in several places
 
 - **Language keywords and built-ins** are listed separately in four files: `vim/syntax/basilisk.vim`, `nano/basilisk.nanorc`, `vscode/syntaxes/basilisk-injection.tmLanguage.json` and the server's `BUILTINS`. Adding a new `foreach_*` loop means four edits, which will drift apart.
-- **Basilisk file detection** (the regex plus a hard-coded list of Basilisk header names) exists twice: `vim/ftdetect/basilisk.vim` and `vscode/extension.js`.
+- **Basilisk file detection** (the regex plus a hard-coded list of Basilisk header names) exists three times: `ftdetect/basilisk.vim`, `vscode/extension.js` and `basilisk-editor.el` (added after the review).
 - **The version number** is in two places: `server/basilisk_lsp.py` and `vscode/package.json`.
 - **The VS Code extension carries a copy of the server**, copied in by `build.sh`. A stale copy is easy to ship by mistake.
 
@@ -139,7 +139,7 @@ New tests: `tests/test_config.py` (9 unit tests: precedence, project files, disc
 ### Phase 2: one source for language knowledge *(fixes C)*
 
 1. `spec/language.json` becomes the single list of keywords, loops, types, qualifiers, built-in variables and functions, boundary names, and their hover documentation. It also holds the file-detection markers.
-2. `tools/generate.py` writes the generated parts of: the vim syntax file, the nano rc, the VS Code injection grammar, the server's `BUILTINS`, and both detection regexes (vim ftdetect and `extension.js`). Generated blocks are fenced with `GENERATED … END GENERATED` markers.
+2. `tools/generate.py` writes the generated parts of: the vim syntax file, the nano rc, the VS Code injection grammar, the Emacs font-lock keywords, the server's `BUILTINS`, and the three detection regexes (vim ftdetect, `extension.js` and `basilisk-editor.el`). Generated blocks are fenced with `GENERATED … END GENERATED` markers.
 3. CI fails if the generated files are out of date (`tools/generate.py --check`).
 
 **Done when:** adding a new `foreach_*` loop takes one edit plus `generate.py`.
@@ -176,7 +176,7 @@ New tests: `tests/test_config.py` (9 unit tests: precedence, project files, disc
    - project configuration;
    - troubleshooting.
 2. **Tested snippets** for:
-   - Emacs: eglot and lsp-mode, combined with Basilisk's `basilisk-mode.el`;
+   - ~~Emacs~~: done early (2026-11-24) as a package, `basilisk-editor.el`. It provides `basilisk-c-mode` with Basilisk highlighting, content-based detection, eglot (default) or lsp-mode, and `M-x compile`. Tested in batch mode with an empty `$HOME`: detection, faces, eglot diagnostics and hover, and autoloads via `package-vc-install-from-checkout`. lsp-mode isn't tested (not installed here), and markdown highlighting in literate comments is left to Basilisk's `basilisk-mode.el`;
    - Helix (`languages.toml`), Zed, Sublime Text (the LSP package) and Kate;
    - coc.nvim and ALE.
 3. `CONTRIBUTING.md` (layout, the generator, running tests), `CHANGELOG.md`, and an issue template that asks for the editor, its version, `basilisk-lsp --version`, `qcc` location and a minimal file.
