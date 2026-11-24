@@ -1,0 +1,4 @@
+#!/bin/sh
+# Launcher for the Basilisk C language server / linter.
+here=$(dirname "$(readlink -f "$0")")
+exec "${BASILISK_LSP_PYTHON:-python3}" "$here/../server/basilisk_lsp.py" "$@"

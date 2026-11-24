@@ -1,0 +1,62 @@
+## Syntax highlighting for Basilisk C (http://basilisk.fr)
+##
+## Basilisk C is a superset of C, so this syntax also works for plain C.
+## See ../README.md for how to make nano pick it for .c/.h files.
+
+syntax basilisk "\.(c|h)$"
+comment "//"
+## ^T (or M-B in older nano) runs qcc and lists the errors.
+linter basilisk-lsp --lint
+
+# Constants.
+color brightred "\<[A-Z_][0-9A-Z_]*\>"
+
+# C types and related keywords.
+color green "\<(auto|bool|char|const|double|enum|extern|float|inline|int|long|restrict|short|signed|sizeof|static|struct|typedef|union|unsigned|void|volatile|register)\>"
+color green "\<([[:lower:]][[:lower:]_]*|(u_?)?int(8|16|32|64))_t\>"
+
+# Basilisk types and qualifiers.
+color brightgreen "\<(scalar|vector|tensor|coord|Point)\>"
+color brightgreen "\<(face|vertex|symmetric|new|delete|trace|macro)\>|\(const\)"
+
+# Flow control.
+color brightyellow "\<(if|else|for|while|do|switch|case|default)\>"
+color magenta "\<(break|continue|goto|return)\>"
+
+# Basilisk loops, events and reductions.
+color brightmagenta "\<(foreach(_[[:alnum:]_]+)?|event|reduction)\>"
+color brightmagenta "\<(first|last)\>|\<t[[:blank:]]*=[[:blank:]]*end\>"
+
+# Basilisk built-in variables and boundaries.
+color cyan "\<(Delta|point|level|dimension|left|right|top|bottom|front|back)\>"
+color cyan "\<(dirichlet|neumann|dirichlet_homogeneous|neumann_homogeneous|periodic|val|fine|coarse|neighbor)\>"
+# Stencil accesses s[], s[1,0] and components .x .y .z .n .t
+color cyan "\[\]"
+color cyan "\.[xyznt]\>"
+
+# Single-quoted stuff.
+color brightmagenta "'([^'\]|\\(["'\abfnrtv]|x[[:xdigit:]]{1,2}|[0-3]?[0-7]{1,2}))'"
+
+# GCC builtins.
+color cyan "__attribute__[[:blank:]]*\(\([^)]*\)\)|__(aligned|asm|builtin|hidden|inline|packed|restrict|section|typeof|weak)__"
+
+# Strings and names of included files.
+color brightyellow ""([^"]|\\")*"|#[[:blank:]]*include[[:blank:]]*<[^>]+>"
+
+# Preprocessor directives.
+color brightcyan start="^[[:blank:]]*#[[:blank:]]*(if(n?def)?|elif|warning|error|pragma)\>" end="(\`|[^\])$"
+color brightcyan "^[[:blank:]]*#[[:blank:]]*((define|else|endif|include(_next)?|line|undef|autolink)\>|$)"
+
+# Comments.
+color brightblue "//.*"
+color brightblue start="/\*" end="\*/"
+
+# Literate documentation comments /** ... */ (markdown): headings stand out.
+color blue start="/\*\*" end="\*/"
+color brightwhite "^#+[[:blank:]]+[[:alpha:]*].*$"
+
+# Reminders.
+color brightwhite,yellow "\<(FIXME|TODO|XXX)\>"
+
+# Trailing whitespace.
+color ,green "[[:space:]]+$"

@@ -1,0 +1,116 @@
+{
+  "name": "basilisk-c",
+  "displayName": "Basilisk C",
+  "description": "Basilisk C (basilisk.fr) support: highlighting, qcc diagnostics, completion, hover docs, go to definition.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:basilisk",
+    "onLanguage:c",
+    "onLanguage:cpp"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "basilisk",
+        "aliases": [
+          "Basilisk C",
+          "basilisk"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "basilisk",
+        "scopeName": "source.basilisk",
+        "path": "./syntaxes/basilisk.tmLanguage.json"
+      },
+      {
+        "scopeName": "basilisk.injection",
+        "path": "./syntaxes/basilisk-injection.tmLanguage.json",
+        "injectTo": [
+          "source.basilisk"
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "basilisk.setLanguage",
+        "title": "Basilisk: Treat this file as Basilisk C"
+      },
+      {
+        "command": "basilisk.restartServer",
+        "title": "Basilisk: Restart language server"
+      }
+    ],
+    "configuration": {
+      "title": "Basilisk C",
+      "properties": {
+        "basilisk.autoDetect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Switch .c/.h files that look like Basilisk C (events, foreach, fields, Basilisk includes) to the Basilisk language."
+        },
+        "basilisk.pythonPath": {
+          "type": "string",
+          "default": "python3",
+          "description": "Python 3 interpreter used to run the language server."
+        },
+        "basilisk.basilisk": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "description": "Path to Basilisk's src/ directory ($BASILISK). Detected from $BASILISK or qcc if unset."
+        },
+        "basilisk.qcc": {
+          "type": "string",
+          "default": "qcc",
+          "description": "qcc executable."
+        },
+        "basilisk.qccFlags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "-Wall"
+          ],
+          "description": "Extra qcc flags for diagnostics (e.g. -grid=octree, -I...)."
+        },
+        "basilisk.diagnostics": {
+          "type": "string",
+          "enum": [
+            "onChange",
+            "onSave",
+            "off"
+          ],
+          "default": "onChange",
+          "description": "When to run qcc for diagnostics."
+        },
+        "basilisk.debounce": {
+          "type": "number",
+          "default": 1.0,
+          "description": "Seconds to wait after typing before checking (onChange)."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}
