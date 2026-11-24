@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Minimal .vsix packager (a .vsix is a zip: [Content_Types].xml,
 extension.vsixmanifest and the extension under extension/)."""
-import json, os, sys, zipfile
+import json, os, re, sys, zipfile
 from xml.sax.saxutils import escape
 
 here = os.path.dirname(os.path.abspath(__file__))
 pkg = json.load(open(os.path.join(here, "package.json")))
+server_src = open(os.path.join(here, "..", "server", "basilisk_lsp.py")).read()
+m = re.search(r'^VERSION = "([^"]+)"', server_src, re.M)
+if not m or m.group(1) != pkg["version"]:
+    sys.exit(f"version mismatch: server {m and m.group(1)} vs vscode/package.json {pkg['version']}")
 skip_top = {"build.sh", "package_vsix.py", ".gitignore", ".vscodeignore"}
 
 files = []

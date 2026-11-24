@@ -128,6 +128,56 @@ msgs = [(x["range"]["start"]["line"], x["message"]) for x in dg["diagnostics"]]
 check("diagnostic undefined_var anchored on line 15",
       any(l == 14 and "undefined_var" in m for l, m in msgs), msgs)
 
+def diags_for(client, version, timeout):
+    """publishDiagnostics for `version`, or None within `timeout` seconds."""
+    def match(m):
+        return m.get("method") == "textDocument/publishDiagnostics" and m["params"].get("version") == version
+    for m in client.pending:
+        if match(m):
+            return m["params"]["diagnostics"]
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            m = client.q.get(timeout=max(0.1, end - time.time()))
+        except queue.Empty:
+            return None
+        if match(m):
+            return m["params"]["diagnostics"]
+    return None
+
+# B1: completion documentation must come from the document the item was made for
+c.pending.clear()
+r = c.request("textDocument/completion", {"textDocument": {"uri": uri}, "position": {"line": 14, "character": 4}})
+statsf = [i for i in r["items"] if i["label"] == "statsf"][0]
+path2 = os.path.join(d, "other.c"); open(path2, "w").write("int main() {}\n")
+uri2 = "file://" + path2
+c.notify("textDocument/didOpen", {"textDocument": {"uri": uri2, "languageId": "basilisk", "version": 1,
+                                                   "text": "int main() {}\n"}})
+c.request("textDocument/hover", {"textDocument": {"uri": uri2}, "position": {"line": 0, "character": 5}})
+it = c.request("completionItem/resolve", statsf)
+check("resolve uses the item's own document (B1)",
+      "utils.h" in it.get("documentation", {}).get("value", ""), it)
+
+# default diagnostics mode is onSave: typing alone does not run qcc
+c.notify("textDocument/didChange", {"textDocument": {"uri": uri, "version": 5},
+                                    "contentChanges": [{"text": SRC + "oops\n"}]})
+check("onSave default: no check while typing", diags_for(c, 5, 4) is None)
+c.notify("textDocument/didSave", {"textDocument": {"uri": uri}})
+dg = diags_for(c, 5, 60)
+check("onSave default: checked on save", bool(dg) and any(x["severity"] == 1 for x in dg), dg)
 c.request("shutdown", None); c.notify("exit", None)
+
+# a client asking for onChange gets diagnostics while typing
+c2 = Client()
+c2.pending = []
+c2.request("initialize", {"processId": None, "rootUri": None, "capabilities": {},
+                          "initializationOptions": {"diagnostics": "onChange", "debounce": 0.2}})
+c2.notify("initialized", {})
+c2.notify("textDocument/didOpen", {"textDocument": {"uri": uri, "languageId": "basilisk", "version": 1, "text": SRC}})
+c2.notify("textDocument/didChange", {"textDocument": {"uri": uri, "version": 2},
+                                     "contentChanges": [{"text": SRC + "oops\n"}]})
+dg = diags_for(c2, 2, 60)
+check("onChange setting: checked while typing", bool(dg) and any(x["severity"] == 1 for x in dg), dg)
+c2.request("shutdown", None); c2.notify("exit", None)
 print("FAILURES:", fails)
 sys.exit(1 if fails else 0)

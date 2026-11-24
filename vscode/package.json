@@ -69,13 +69,13 @@
           "default": "python3",
           "description": "Python 3 interpreter used to run the language server."
         },
-        "basilisk.basilisk": {
+        "basilisk.path": {
           "type": [
             "string",
             "null"
           ],
           "default": null,
-          "description": "Path to Basilisk's src/ directory ($BASILISK). Detected from $BASILISK or qcc if unset."
+          "description": "Basilisk's src/ directory ($BASILISK). Found automatically from $BASILISK, qcc on PATH or common locations if unset."
         },
         "basilisk.qcc": {
           "type": "string",
@@ -90,22 +90,30 @@
           "default": [
             "-Wall"
           ],
-          "description": "Extra qcc flags for diagnostics (e.g. -grid=octree, -I...)."
+          "description": "Extra qcc flags for diagnostics (e.g. -grid=octree). Per-project flags belong in .basilisk-lsp.json, which takes precedence."
         },
         "basilisk.diagnostics": {
           "type": "string",
           "enum": [
-            "onChange",
             "onSave",
+            "onChange",
             "off"
           ],
-          "default": "onChange",
-          "description": "When to run qcc for diagnostics."
+          "default": "onSave",
+          "description": "When to run qcc for diagnostics. qcc takes ~2 s of CPU per check, so onChange is opt-in."
         },
         "basilisk.debounce": {
           "type": "number",
           "default": 1.0,
           "description": "Seconds to wait after typing before checking (onChange)."
+        },
+        "basilisk.includeDirs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra include directories (-I)."
         }
       }
     }

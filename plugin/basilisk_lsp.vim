@@ -1,14 +1,16 @@
-" Registers basilisk-lsp with vim-lsp, if installed. (Neovim: see basilisk_lsp.lua)
+" Basilisk C: registers the language server with vim-lsp (if installed) and
+" sets qcc as :make program. The server ships with this plugin.
 if exists('g:loaded_basilisk_lsp_vim')
   finish
 endif
 let g:loaded_basilisk_lsp_vim = 1
 
-let s:cmd = get(g:, 'basilisk_lsp_cmd', ['basilisk-lsp'])
+let g:basilisk_lsp_root = expand('<sfile>:p:h:h')
+let s:cmd = get(g:, 'basilisk_lsp_cmd', [g:basilisk_lsp_root . '/bin/basilisk-lsp'])
 
 augroup basilisk_lsp
   autocmd!
-  autocmd User lsp_setup if !has('nvim') && executable(s:cmd[0]) | call lsp#register_server({
+  autocmd User lsp_setup if !has('nvim') | call lsp#register_server({
         \ 'name': 'basilisk-lsp',
         \ 'cmd': {server_info -> s:cmd},
         \ 'allowlist': ['basilisk'],

@@ -1,4 +1,10 @@
 #!/bin/sh
-# Launcher for the Basilisk C language server / linter.
-here=$(dirname "$(readlink -f "$0")")
+# Launcher for the Basilisk C language server / linter (POSIX sh, no GNU tools).
+# Follows symlinks (e.g. ~/.local/bin/basilisk-lsp) back to the repository.
+f=$0
+while [ -L "$f" ]; do
+  l=$(ls -ld -- "$f" | sed 's/.* -> //')
+  case $l in /*) f=$l ;; *) f=$(dirname -- "$f")/$l ;; esac
+done
+here=$(cd -P -- "$(dirname -- "$f")" && pwd)
 exec "${BASILISK_LSP_PYTHON:-python3}" "$here/../server/basilisk_lsp.py" "$@"

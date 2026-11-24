@@ -49,6 +49,7 @@ In practice that means:
 | B4 | gcc reports byte columns, but LSP positions are UTF-16. Ranges are shifted on lines containing non-ASCII characters (e.g. `ρ` in comments before code). | `make_diagnostics` |
 | B5 | `bin/basilisk-lsp` uses `readlink -f`, which is missing on macOS before 12.3. | `bin/basilisk-lsp` |
 | B6 | The setting for the Basilisk path is called `basilisk.basilisk` in VS Code: confusing, and costly to rename after the first release. | `vscode/package.json`, server `DEFAULTS` |
+| B7 | *Found during Phase 1.* Errors qcc prints without a location (e.g. `qcc: error: cannot parse input (missing closing braces?)`) were dropped, so a file qcc can't parse at all looked clean. | `run_qcc` |
 
 ### C. Maintainability: the same knowledge copied in several places
 
@@ -75,7 +76,7 @@ In practice that means:
 | # | Decision | Status |
 |---|---|---|
 | D1 | License | **Decided: GPL-3.0-or-later**, Basilisk's license. `LICENSE` is a copy of Basilisk's `src/COPYING` (GPLv3). |
-| D2 | Hosting | **Decided: a public git repository.** Still to choose: the platform and the URL. A GitHub repository is assumed below (CI, releases, plugin-manager installs). |
+| D2 | Hosting | **Decided and done:** public GitHub repository, https://github.com/Riccaraccio/basilisk-editor |
 | D3 | Name and IDs | **Postponed:** there is no publisher ID yet. Until there is one, the `.vsix` is distributed as a release download; marketplace publishing (part of Phase 3, step 6) waits. The repository name stays `basilisk-editor`. |
 | D4 | Default diagnostics mode | **Decided: `onSave`** by default; `onChange` is opt-in (in the project file or editor settings). This is the safer default on shared machines and cluster login nodes. Implemented in Phase 1. |
 | D5 | Upstream | Open. Once it has had a beta, consider proposing it to Basilisk's maintainers (a link from basilisk.fr, or shipping it next to `basilisk-mode.el`). |
@@ -84,18 +85,18 @@ In practice that means:
 
 Each phase ends in a state that could be shared. Phases 1–3 are needed before announcing it; 4–5 make the announcement land well; 6 is feature work afterwards.
 
-### Phase 0: repository foundation *(done in this commit)*
+### Phase 0: repository foundation *(done)*
 
 - `git init`, `LICENSE` (GPLv3, D1), `.gitignore` (node_modules, built `.vsix`, the server copy inside `vscode/`, `__pycache__`), and this plan.
 
-### Phase 1: install from the repository URL in every editor *(fixes A2–A6, B1–B6)*
+### Phase 1: install from the repository URL in every editor *(fixes A2–A6, B1–B7; done)*
 
 1. **Move the vim runtime directories to the repository root**: `ftdetect/ syntax/ ftplugin/ indent/ compiler/ plugin/`. The repository then *is* a vim/neovim plugin:
    ```vim
-   Plug 'x/basilisk-editor'                -- vim-plug
+   Plug 'Riccaraccio/basilisk-editor'      " vim-plug
    ```
    ```lua
-   { "x/basilisk-editor" }                 -- lazy.nvim
+   { "Riccaraccio/basilisk-editor" }      -- lazy.nvim
    ```
 2. **The server locates itself.** The vim and neovim plugins default to `<plugin root>/bin/basilisk-lsp` when `basilisk-lsp` isn't on `PATH`, so no `install.sh` is needed for them. `install.sh` remains only for nano's linter and for a global `basilisk-lsp` command.
 3. **Project configuration file.** The server looks for `.basilisk-lsp.json`, starting in the source file's directory and walking up. It is read by every editor *and* by `--lint` (so nano gets it too). Precedence: built-in defaults < editor settings < project file. Example:
@@ -118,6 +119,22 @@ Each phase ends in a state that could be shared. Phases 1–3 are needed before 
 - in nano, add one `include` line and get highlighting and the linter;
 - in VS Code, install the `.vsix` and get everything;
 - put `-grid=octree` in `.basilisk-lsp.json` and have it honoured by **all** of the above.
+
+**Status (2026-11-24): done.** Verified with an empty `$HOME`, no `$BASILISK`, and neither `qcc` nor `basilisk-lsp` on `PATH`:
+- vim with a native package: Basilisk filetype and syntax; `:make` runs the bundled launcher and fills the quickfix list.
+- neovim with a native package: the server attaches, diagnostics arrive on open, and hover works.
+- nano after `install.sh nano`: highlighting, and the linter via the `~/.local/bin` link.
+- the project file: a case guarded by `#if dimension != 3 / #error` passes with `-grid=octree` in `.basilisk-lsp.json` and fails without it.
+- discovery failure gives a message listing everything tried; bad project files are reported.
+- your own lazy.nvim and vim setups work with the new layout.
+- no false diagnostics on `src/examples` (0/39), and the header cases are unchanged.
+
+New tests: `tests/test_config.py` (9 unit tests: precedence, project files, discovery, columns) and, in `tests/test_lsp.py`, B1, the onSave default, and onChange via settings.
+
+**Still open:**
+- vim-plug and lazy.nvim installing *from the GitHub URL* with an empty `$HOME`. The sandbox here blocks downloading and running those plugin managers; your own lazy.nvim, with `dir =` pointing at the checkout, uses the same loading path.
+- The VS Code extension has been rebuilt and installed but not yet watched running in the editor.
+- The version check runs when the `.vsix` is built; making CI run it belongs to Phase 3.
 
 ### Phase 2: one source for language knowledge *(fixes C)*
 

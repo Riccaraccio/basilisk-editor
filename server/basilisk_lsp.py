@@ -19,6 +19,12 @@ Licensed under the GNU GPL, version 3 or later (see LICENSE), like Basilisk.
 Usage
   basilisk_lsp.py [--stdio]             run the language server on stdio
   basilisk_lsp.py --lint FILE [FLAGS]   print diagnostics as FILE:LINE:COL: sev: msg
+  basilisk_lsp.py --config FILE         show the settings which apply to FILE
+
+Settings (lowest to highest precedence): built-in defaults, editor
+settings (LSP initializationOptions / workspace configuration), and the
+project file `.basilisk-lsp.json`, looked up from the file's directory
+upwards. See README.md.
 """
 
 import json
@@ -29,21 +35,145 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.parse
 
 VERSION = "0.1.0"
 
 DEFAULTS = {
-    "qcc": "qcc",              # qcc executable
+    "qcc": "qcc",              # qcc executable (found in basiliskPath if not on PATH)
     "qccFlags": ["-Wall"],     # extra flags for diagnostics (e.g. -grid=octree)
-    "diagnostics": "onChange", # "onChange" | "onSave" | "off"
+    "includeDirs": [],         # extra include directories (-I)
+    "diagnostics": "onSave",   # "onSave" | "onChange" | "off"
     "debounce": 1.0,           # seconds, for onChange
-    "basilisk": None,          # path to $BASILISK (the src/ directory)
+    "basiliskPath": None,      # Basilisk's src/ directory ($BASILISK)
 }
+PROJECT_FILE = ".basilisk-lsp.json"
+# where Basilisk usually lives when neither $BASILISK nor qcc's PATH say
+COMMON_ROOTS = ["~/basilisk/src", "~/basilisk/basilisk/src", "~/src/basilisk/src",
+                "/usr/local/basilisk/src", "/opt/basilisk/src"]
 
 
 def log(*args):
     print("[basilisk-lsp]", *args, file=sys.stderr, flush=True)
+
+
+# ---------------------------------------------------------------------------
+# Configuration
+
+def is_root(d):
+    return bool(d) and os.path.isfile(os.path.join(d, "common.h"))
+
+
+def find_project_file(path):
+    d = os.path.dirname(os.path.abspath(path))
+    while True:
+        f = os.path.join(d, PROJECT_FILE)
+        if os.path.isfile(f):
+            return f
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+
+_project_cache = {}
+
+
+def load_project_file(f):
+    """Returns (settings, error)."""
+    try:
+        mt = os.stat(f).st_mtime
+    except OSError as e:
+        return {}, str(e)
+    c = _project_cache.get(f)
+    if c and c[0] == mt:
+        return c[1], c[2]
+    try:
+        with open(f, encoding="utf-8") as fp:
+            data = json.load(fp)
+        if not isinstance(data, dict):
+            raise ValueError("expected a JSON object")
+        unknown = sorted(set(data) - set(DEFAULTS))
+        err = f"{f}: unknown setting(s) {', '.join(unknown)}" if unknown else None
+        res = ({k: v for k, v in data.items() if k in DEFAULTS}, err)
+    except (OSError, ValueError) as e:
+        res = ({}, f"{f}: {e}")
+    _project_cache[f] = (mt,) + res
+    return res
+
+
+def absolutize(settings, base):
+    """Makes the relative paths in `settings` relative to directory `base`."""
+    s = dict(settings)
+    flags = s.get("qccFlags")
+    if isinstance(flags, str):
+        flags = flags.split()
+    if flags is not None:
+        out = []
+        for fl in flags:
+            if fl.startswith("-I") and len(fl) > 2:
+                fl = "-I" + os.path.normpath(os.path.join(base, os.path.expanduser(fl[2:])))
+            out.append(fl)
+        s["qccFlags"] = out
+    if s.get("includeDirs") is not None:
+        s["includeDirs"] = [os.path.normpath(os.path.join(base, os.path.expanduser(d)))
+                            for d in s["includeDirs"]]
+    for k in ("basiliskPath", "qcc"):
+        v = s.get(k)
+        if v and (os.sep in v or v.startswith("~")):
+            s[k] = os.path.normpath(os.path.join(base, os.path.expanduser(v)))
+    return s
+
+
+def find_basilisk(cfg):
+    """Returns (root or None, list of what was tried)."""
+    tried = []
+    cands = [("setting basiliskPath", cfg.get("basiliskPath")),
+             ("$BASILISK", os.environ.get("BASILISK"))]
+    q = shutil.which(cfg.get("qcc") or "qcc")
+    cands.append(("qcc on PATH", os.path.dirname(os.path.realpath(q)) if q else None))
+    cands += [("common location", os.path.expanduser(c)) for c in COMMON_ROOTS]
+    for what, d in cands:
+        if not d:
+            continue
+        tried.append(f"{what} ({d})")
+        if is_root(d):
+            return os.path.abspath(d), tried
+    return None, tried
+
+
+def resolve_config(settings, path):
+    """Effective configuration for file `path`, given the editor `settings`."""
+    cfg = dict(DEFAULTS)
+    doc_dir = os.path.dirname(os.path.abspath(path))
+    cfg.update({k: v for k, v in absolutize(settings, doc_dir).items() if v is not None})
+    errors = []
+    proj = find_project_file(path)
+    if proj:
+        data, err = load_project_file(proj)
+        if err:
+            errors.append(err)
+        cfg.update({k: v for k, v in absolutize(data, os.path.dirname(proj)).items() if v is not None})
+    cfg["project"] = proj
+    root, tried = find_basilisk(cfg)
+    cfg["root"] = root
+    qcc = shutil.which(cfg.get("qcc") or "qcc")
+    if not qcc and root and os.path.isfile(os.path.join(root, "qcc")):
+        qcc = os.path.join(root, "qcc")
+    cfg["qccExe"] = qcc
+    flags = list(cfg.get("qccFlags") or [])
+    flags += ["-I" + d for d in cfg.get("includeDirs") or []]
+    cfg["flags"] = flags
+    cfg["idirs"] = [f[2:] for f in flags if f.startswith("-I") and len(f) > 2]
+    if not root:
+        errors.append("cannot find Basilisk (tried: " + "; ".join(tried) + "). Set $BASILISK, "
+                      "put qcc on PATH, or set basiliskPath in " + PROJECT_FILE + " or the editor settings.")
+    elif not qcc:
+        errors.append(f"cannot find qcc (not on PATH nor in {root}); set the `qcc` setting.")
+    cfg["errors"] = errors
+    cfg["key"] = json.dumps({k: cfg[k] for k in ("root", "flags", "qccExe", "project")}, sort_keys=True)
+    return cfg
 
 
 # ---------------------------------------------------------------------------
@@ -508,16 +638,20 @@ HEADER_SKIP = {"ast", "test", "examples", "darcsit", "build-env", "figures",
                "notes", "wsServer"}
 
 
-class Index:
-    def __init__(self, server):
-        self.server = server
-        self.files = {}        # path -> (mtime, FileInfo)
-        self.headers = None    # cached list of (relpath, abspath)
-        self.lock = threading.Lock()
+def _mtime(p):
+    try:
+        return os.stat(p).st_mtime
+    except OSError:
+        return None
 
-    @property
-    def root(self):
-        return self.server.basilisk
+
+class Index:
+    """Cache of scanned files, shared by all configurations."""
+
+    def __init__(self):
+        self.files = {}        # path -> (mtime, FileInfo)
+        self.headers = {}      # root -> (dir mtimes, list of (relpath, abspath))
+        self.lock = threading.Lock()
 
     def info(self, path, text=None):
         if text is not None:
@@ -539,28 +673,20 @@ class Index:
             self.files[path] = (mt, fi)
         return fi
 
-    def include_dirs(self):
-        dirs = []
-        for f in self.server.cfg.get("qccFlags") or []:
-            if f.startswith("-I") and len(f) > 2:
-                dirs.append(f[2:])
-        if self.root:
-            dirs.append(self.root)
-        return dirs
-
-    def resolve(self, name, from_dir):
-        for d in [from_dir] + self.include_dirs():
+    def resolve(self, name, from_dir, cfg):
+        dirs = [from_dir] + cfg["idirs"] + ([cfg["root"]] if cfg["root"] else [])
+        for d in dirs:
             p = os.path.normpath(os.path.join(d, name))
             if os.path.isfile(p):
                 return p
         return None
 
-    def closure(self, path, fi):
+    def closure(self, path, fi, cfg):
         """Paths of the headers included (transitively) by a file, plus the
         headers implicitly included by qcc."""
         seen, order = {path}, []
         queue = [(os.path.dirname(path), fi.includes)]
-        grid_given = any(f.startswith("-grid=") for f in self.server.cfg.get("qccFlags") or [])
+        grid_given = any(f.startswith("-grid=") for f in cfg["flags"])
         while queue:
             d, incs = queue.pop(0)
             for delim, name, _ in incs:
@@ -568,7 +694,7 @@ class Index:
                     continue
                 if name.startswith("grid/") and os.path.splitext(os.path.basename(name))[0] in GRIDS:
                     grid_given = True
-                p = self.resolve(name, d)
+                p = self.resolve(name, d, cfg)
                 if p and p not in seen:
                     seen.add(p)
                     order.append(p)
@@ -578,13 +704,14 @@ class Index:
         implicit = ["common.h"]
         if not grid_given:
             implicit.append("grid/quadtree.h")
-        for flag in self.server.cfg.get("qccFlags") or []:
+        for flag in cfg["flags"]:
             if flag.startswith("-grid="):
                 implicit.append("grid/" + flag[6:] + ".h")
-        if self.root:
+        root = cfg["root"]
+        if root:
             queue = []
             for name in implicit:
-                p = os.path.join(self.root, name)
+                p = os.path.join(root, name)
                 if os.path.isfile(p) and p not in seen:
                     seen.add(p)
                     order.append(p)
@@ -596,7 +723,7 @@ class Index:
                 for delim, name, _ in incs:
                     if delim == "<":
                         continue
-                    p = self.resolve(name, d)
+                    p = self.resolve(name, d, cfg)
                     if p and p not in seen:
                         seen.add(p)
                         order.append(p)
@@ -605,27 +732,32 @@ class Index:
                             queue.append((os.path.dirname(p), sub.includes))
         return order
 
-    def header_list(self, extra_dir=None):
-        if self.headers is None:
-            hs = []
-            if self.root:
-                for d, dirs, files in os.walk(self.root):
-                    rel = os.path.relpath(d, self.root)
+    def header_list(self, cfg, extra_dir=None):
+        """Headers for #include completion: the document's directory, the
+        include directories, then Basilisk's. Refreshed when a directory
+        changes."""
+        out = []
+        root = cfg["root"]
+        if root:
+            c = self.headers.get(root)
+            if c is None or any(_mtime(d) != m for d, m in c[0].items()):
+                mtimes, hs = {}, []
+                for d, dirs, files in os.walk(root):
+                    rel = os.path.relpath(d, root)
                     top = rel.split(os.sep)[0]
                     dirs[:] = sorted(x for x in dirs if not x.startswith(".")
                                      and not (rel == "." and x in HEADER_SKIP))
                     if top in HEADER_SKIP:
                         continue
+                    mtimes[d] = _mtime(d)
                     for f in sorted(files):
                         if f.endswith(".h"):
-                            p = os.path.join(d, f)
-                            hs.append((os.path.normpath(os.path.join(rel, f)), p))
-            self.headers = hs
-        out = list(self.headers)
-        if extra_dir and os.path.isdir(extra_dir) and extra_dir != self.root:
-            for f in sorted(os.listdir(extra_dir)):
-                if f.endswith(".h"):
-                    out.insert(0, (f, os.path.join(extra_dir, f)))
+                            hs.append((os.path.normpath(os.path.join(rel, f)), os.path.join(d, f)))
+                c = self.headers[root] = (mtimes, hs)
+            out = list(c[1])
+        for d in reversed([extra_dir] + cfg["idirs"]):
+            if d and os.path.isdir(d) and d != root:
+                out[:0] = [(f, os.path.join(d, f)) for f in sorted(os.listdir(d)) if f.endswith(".h")]
         return out
 
     def title(self, path):
@@ -651,23 +783,22 @@ CTX_RE = re.compile(r"^(?P<file>[^:\n]+?):\s*In (?:member )?function\s+"
                     r"[‘'`\"](?P<fn>[^’'`\"]+)[’'`\"]")
 QUOTED_ID = re.compile(r"[‘'`\"](" + ID + r")[’'`\"]")
 SEV = {"error": 1, "fatal error": 1, "warning": 2, "note": 3}
+GENERIC_RE = re.compile(r"^(?:qcc|cc|gcc|cc1|ld|collect2): (fatal error|error|warning): (.*)$")
 
 
-def run_qcc(server, files, main, idir, procs=None, key=None):
+def run_qcc(cfg, files, main, idir, procs=None, key=None):
     """Runs `qcc -fsyntax-only main` in a temporary directory holding
     `files` ({name: (text, real path or None)}), with -I`idir`.
 
     Returns (raw, None) where raw is a list of diagnostics
     [real path or reported name, line, col, sev, msg, ctx], or
     (None, error message) / (None, None) if superseded."""
-    qcc = server.cfg.get("qcc") or "qcc"
-    if not shutil.which(qcc):
-        return None, "qcc not found (set the `qcc` option or add it to PATH)"
-    flags = list(server.cfg.get("qccFlags") or [])
+    qcc = cfg["qccExe"]
+    if not qcc or not cfg["root"]:
+        return None, " ".join(cfg["errors"]) or "qcc not found"
+    flags = list(cfg["flags"])
     tmp = tempfile.mkdtemp(prefix="basilisk-lsp-")
-    idirs = [idir] + [f[2:] for f in flags if f.startswith("-I") and len(f) > 2]
-    if server.basilisk:
-        idirs.append(server.basilisk)
+    idirs = [idir] + cfg["idirs"] + [cfg["root"]]
 
     def real(f):
         """Maps a file name reported by qcc/gcc to the real file."""
@@ -687,8 +818,8 @@ def run_qcc(server, files, main, idir, procs=None, key=None):
             with open(os.path.join(tmp, name), "w", encoding="utf-8") as f:
                 f.write(text)
         env = dict(os.environ)
-        if server.basilisk:
-            env.setdefault("BASILISK", server.basilisk)
+        env["BASILISK"] = cfg["root"]
+        env["PATH"] = os.path.dirname(qcc) + os.pathsep + env.get("PATH", "")
         cmd = [qcc] + flags + ["-fsyntax-only", "-I" + idir, main]
         p = subprocess.Popen(cmd, cwd=tmp, env=env, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
@@ -702,6 +833,9 @@ def run_qcc(server, files, main, idir, procs=None, key=None):
         out = out.decode("utf-8", errors="replace")
         if p.returncode is not None and p.returncode < 0:
             return None, None   # killed (superseded)
+        # errors without a location (e.g. "qcc: error: cannot parse input")
+        # belong to the file being checked
+        target = files[main][1] or next((r for _, r in files.values() if r), main)
         raw, ctx, last = [], None, None
         for l in out.splitlines():
             m = CTX_RE.match(l)
@@ -716,6 +850,11 @@ def run_qcc(server, files, main, idir, procs=None, key=None):
                         m.group("sev"), m.group("msg"), ctx]
                 raw.append(last)
                 continue
+            m = GENERIC_RE.match(l)
+            if m:
+                last = [target, 1, None, m.group(1), m.group(2), None]
+                raw.append(last)
+                continue
             if (l.startswith("In file included") or re.match(r"^\s+from ", l)
                     or re.match(r"^[^:]+: At top level:", l)
                     or re.match(r"^\s*\d*\s*\|", l) or l.startswith("compilation terminated")):
@@ -723,6 +862,12 @@ def run_qcc(server, files, main, idir, procs=None, key=None):
                 continue
             if last is not None and l.strip():
                 last[4] += "\n" + l   # continuation (e.g. qcc parse error snippets)
+        if p.returncode and not any(r[3] in ("error", "fatal error") for r in raw):
+            # failed, but nothing we recognised: never report a clean file
+            tail = [l for l in out.splitlines() if l.strip()][-3:]
+            raw.append([target, 1, None, "error",
+                        f"qcc failed (exit status {p.returncode})" +
+                        (": " + " / ".join(tail) if tail else ""), None])
         return raw, None
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -732,7 +877,7 @@ WRAPPER = "_basilisk_lsp_check.c"
 MAX_FOREIGN = 10   # max. diagnostics reported in other files, per check
 
 
-def find_context(server, path, docs):
+def find_context(server, path, docs, cfg):
     """A .c file including header `path`: an open document first, then a
     file in the same directory. Returns (c path, c text) or None."""
     target = os.path.realpath(path)
@@ -756,7 +901,7 @@ def find_context(server, path, docs):
             fi = scan(text, p) if text is not None else server.index.info(p)
         except OSError:
             continue
-        if fi and target in {os.path.realpath(f) for f in server.index.closure(p, fi)}:
+        if fi and target in {os.path.realpath(f) for f in server.index.closure(p, fi, cfg)}:
             if text is None:
                 with open(p, encoding="utf-8", errors="replace") as f:
                     text = f.read()
@@ -768,14 +913,15 @@ def check(server, path, text, docs=None, procs=None, key=None):
     """Diagnostics for `path` (with contents `text`).
     Returns (diagnostics, error) — diagnostics None means 'keep the old ones'."""
     path = os.path.abspath(path)
+    cfg = server.config(path)
     d, base = os.path.dirname(path), os.path.basename(path)
     if not path.endswith(".h"):
-        raw, err = run_qcc(server, {base: (text, os.path.realpath(path))}, base, d, procs, key)
-        return (None, err) if raw is None else (make_diagnostics(server, path, text, raw), None)
+        raw, err = run_qcc(cfg, {base: (text, os.path.realpath(path))}, base, d, procs, key)
+        return (None, err) if raw is None else (make_diagnostics(cfg, path, text, raw), None)
 
     # Headers are not compiled on their own by qcc: check them through
     # a .c file which includes them.
-    ctx = find_context(server, path, docs or {})
+    ctx = find_context(server, path, docs or {}, cfg)
     if ctx:
         try:
             with open(path, encoding="utf-8", errors="replace") as f:
@@ -786,20 +932,20 @@ def check(server, path, text, docs=None, procs=None, key=None):
             return None, None   # checked on save, in context
         cpath, ctext = ctx
         cbase = os.path.basename(cpath)
-        raw, err = run_qcc(server, {cbase: (ctext, os.path.realpath(cpath))}, cbase,
+        raw, err = run_qcc(server.config(cpath), {cbase: (ctext, os.path.realpath(cpath))}, cbase,
                            os.path.dirname(cpath), procs, key)
         if raw is None:
             return None, err
         target = os.path.realpath(path)
         raw = [r for r in raw if r[0] == target]
-        return make_diagnostics(server, path, text, raw, foreign=False), None
+        return make_diagnostics(cfg, path, text, raw, foreign=False), None
 
     files = {base: (text, os.path.realpath(path)),
              WRAPPER: (f'#include "{base}"\n', None)}
-    raw, err = run_qcc(server, files, WRAPPER, d, procs, key)
+    raw, err = run_qcc(cfg, files, WRAPPER, d, procs, key)
     if raw is None:
         return None, err
-    diags = make_diagnostics(server, path, text, raw, foreign=False)
+    diags = make_diagnostics(cfg, path, text, raw, foreign=False)
     errors = [x for x in diags if x["severity"] == 1 and "parse error" not in x["message"]]
     if errors:
         # most likely a header which needs other headers included before it
@@ -814,7 +960,17 @@ def check(server, path, text, docs=None, procs=None, key=None):
     return diags, None
 
 
-def make_diagnostics(server, path, text, raw, foreign=True):
+def idx_to_u16(s, i):
+    """Python string index -> LSP (UTF-16) column."""
+    return len(s[:i].encode("utf-16-le")) // 2
+
+
+def byte_to_idx(s, b):
+    """UTF-8 byte offset (as reported by gcc) -> Python string index."""
+    return len(s.encode("utf-8")[:b].decode("utf-8", errors="ignore"))
+
+
+def make_diagnostics(cfg, path, text, raw, foreign=True):
     """Maps raw qcc/gcc diagnostics onto the document. Diagnostics reported
     in other files are attached to the closest location in the document,
     unless `foreign` is False."""
@@ -827,8 +983,12 @@ def make_diagnostics(server, path, text, raw, foreign=True):
     diags, seen = [], set()
     nforeign = 0
 
+    def u16(l, c):
+        return idx_to_u16(olines[l], c) if 0 <= l < len(olines) else c
+
     def rng(l0, c0, l1, c1):
-        return {"start": {"line": l0, "character": c0}, "end": {"line": l1, "character": c1}}
+        return {"start": {"line": l0, "character": u16(l0, c0)},
+                "end": {"line": l1, "character": u16(l1, c1)}}
 
     def line_range(l):
         l = max(0, min(l, len(olines) - 1))
@@ -843,7 +1003,7 @@ def make_diagnostics(server, path, text, raw, foreign=True):
             l = line - 1
             if col:
                 s = olines[l] if 0 <= l < len(olines) else ""
-                c = col - 1
+                c = byte_to_idx(s, col - 1)
                 m = re.match(r"\w+", s[c:])
                 r = rng(l, c, l, c + (len(m.group()) if m else 1))
             elif nl and "parse error" in msg:
@@ -859,8 +1019,8 @@ def make_diagnostics(server, path, text, raw, foreign=True):
             if nforeign > MAX_FOREIGN:
                 continue
             rel = f
-            if server.basilisk and f.startswith(server.basilisk):
-                rel = os.path.relpath(f, server.basilisk)
+            if cfg["root"] and f.startswith(cfg["root"] + os.sep):
+                rel = os.path.relpath(f, cfg["root"])
             text_msg += f"  [reported in {rel}:{line}]"
             anchor = None
             if ctx:
@@ -923,8 +1083,10 @@ SK = {"function": 12, "macro": 12, "define": 14, "event": 24, "field": 13,
 
 
 class Server:
-    def __init__(self):
-        self.cfg = dict(DEFAULTS)
+    def __init__(self, extra_flags=None):
+        self.settings = {}           # editor settings (lowest precedence after defaults)
+        self.extra_flags = list(extra_flags or [])
+        self._cfg_cache = {}
         self.docs = {}
         self.out_lock = threading.Lock()
         self.state_lock = threading.Lock()
@@ -932,35 +1094,44 @@ class Server:
         self.procs = {}
         self.snippets = False
         self.resolve_store = {}
-        self.basilisk = None
-        self.index = Index(self)
+        self.index = Index()
         self.running = True
-        self.warned = False
-        self.set_config({})
+        self.warned = set()
 
     # -- configuration
     def set_config(self, opts):
-        if isinstance(opts, dict):
-            if "basilisk" in opts and isinstance(opts["basilisk"], dict):
-                opts = opts["basilisk"]
-            for k in DEFAULTS:
-                if k in opts and opts[k] is not None:
-                    self.cfg[k] = opts[k]
-        if isinstance(self.cfg.get("qccFlags"), str):
-            self.cfg["qccFlags"] = self.cfg["qccFlags"].split()
-        self.basilisk = self.find_basilisk()
-        self.index.headers = None
+        """Editor settings: {"qccFlags": [...], ...}, possibly nested in a
+        "basilisk" section (VS Code, where basiliskPath is called "path")."""
+        if not isinstance(opts, dict):
+            return
+        if isinstance(opts.get("basilisk"), dict):
+            opts = opts["basilisk"]
+        if "path" in opts and "basiliskPath" not in opts:
+            opts = dict(opts, basiliskPath=opts["path"])
+        self.settings = {k: opts[k] for k in DEFAULTS if opts.get(k) is not None}
+        self._cfg_cache = {}
 
-    def find_basilisk(self):
-        for c in (self.cfg.get("basilisk"), os.environ.get("BASILISK")):
-            if c and os.path.isfile(os.path.join(c, "common.h")):
-                return os.path.abspath(c)
-        q = shutil.which(self.cfg.get("qcc") or "qcc")
-        if q:
-            d = os.path.dirname(os.path.realpath(q))
-            if os.path.isfile(os.path.join(d, "common.h")):
-                return d
-        return None
+    def config(self, path):
+        """Effective configuration for `path`, cached briefly per directory
+        (a completion request asks for it thousands of times)."""
+        d = os.path.dirname(os.path.abspath(path))
+        c = self._cfg_cache.get(d)
+        now = time.monotonic()
+        if c and now - c[0] < 2.0:
+            return c[1]
+        cfg = resolve_config(self.settings, path)
+        if self.extra_flags:
+            cfg["flags"] = cfg["flags"] + self.extra_flags
+            cfg["idirs"] = cfg["idirs"] + [f[2:] for f in self.extra_flags
+                                           if f.startswith("-I") and len(f) > 2]
+        self._cfg_cache[d] = (now, cfg)
+        return cfg
+
+    def warn(self, msg):
+        if msg not in self.warned:
+            self.warned.add(msg)
+            log(msg)
+            self.notify("window/showMessage", {"type": 2, "message": "basilisk-lsp: " + msg})
 
     # -- transport
     def send(self, msg):
@@ -1016,7 +1187,7 @@ class Server:
         caps = p.get("capabilities") or {}
         self.snippets = bool(caps.get("textDocument", {}).get("completion", {})
                              .get("completionItem", {}).get("snippetSupport"))
-        log("BASILISK =", self.basilisk)
+        log("version", VERSION, "settings", json.dumps(self.settings))
         return {
             "capabilities": {
                 "textDocumentSync": {"openClose": True, "change": 1,
@@ -1031,9 +1202,7 @@ class Server:
         }
 
     def on_initialized(self, p):
-        if not self.basilisk:
-            self.notify("window/showMessage", {"type": 2, "message":
-                "basilisk-lsp: cannot find Basilisk; set $BASILISK or the `basilisk` option."})
+        pass
 
     def on_shutdown(self, p):
         return None
@@ -1048,6 +1217,8 @@ class Server:
     def on_textDocument_didOpen(self, p):
         d = p["textDocument"]
         self.docs[d["uri"]] = {"text": d["text"], "version": d.get("version", 0)}
+        for err in self.config(uri_to_path(d["uri"]))["errors"]:
+            self.warn(err)
         self.schedule(d["uri"], 0)
 
     def on_textDocument_didChange(self, p):
@@ -1059,8 +1230,9 @@ class Server:
             else:
                 doc["text"] = apply_change(doc["text"], ch)
         doc["version"] = p["textDocument"].get("version", doc["version"] + 1)
-        if self.cfg.get("diagnostics") == "onChange":
-            self.schedule(uri, float(self.cfg.get("debounce") or 1.0))
+        cfg = self.config(uri_to_path(uri))
+        if cfg.get("diagnostics") == "onChange":
+            self.schedule(uri, float(cfg.get("debounce") or 1.0))
 
     def on_textDocument_didSave(self, p):
         self.schedule(p["textDocument"]["uri"], 0)
@@ -1075,7 +1247,7 @@ class Server:
         self.notify("textDocument/publishDiagnostics", {"uri": uri, "diagnostics": []})
 
     def schedule(self, uri, delay):
-        if self.cfg.get("diagnostics") == "off":
+        if self.config(uri_to_path(uri)).get("diagnostics") == "off":
             return
         with self.state_lock:
             t = self.timers.pop(uri, None)
@@ -1098,9 +1270,8 @@ class Server:
         path = uri_to_path(uri)
         diags, err = check(self, path, text, self.docs, self.procs, uri)
         if diags is None:
-            if err and not self.warned:
-                self.warned = True
-                self.notify("window/showMessage", {"type": 2, "message": "basilisk-lsp: " + err})
+            if err:
+                self.warn(err)
             return
         cur = self.docs.get(uri)
         if not cur or cur["version"] != version:
@@ -1112,12 +1283,13 @@ class Server:
     def context(self, uri):
         doc = self.docs.get(uri) or {"text": ""}
         path = uri_to_path(uri)
-        key = doc.get("version")
+        cfg = self.config(path)
         cache = doc.get("_ctx")
-        if cache and cache[0] == key:
+        if (cache and cache[0] == (doc.get("version"), cfg["key"])
+                and all(_mtime(f) == m for f, m in cache[2])):
             return cache[1]
         fi = scan(doc["text"], path)
-        files = self.index.closure(path, fi)
+        files = self.index.closure(path, fi, cfg)
         table = {}
         for s in fi.symbols:
             table.setdefault(s.name, []).append(s)
@@ -1130,7 +1302,7 @@ class Server:
                 if s.kind == "event" or not lst or all(x.path != s.path for x in lst):
                     lst.append(s)
         ctx = (fi, files, table)
-        doc["_ctx"] = (key, ctx)
+        doc["_ctx"] = ((doc.get("version"), cfg["key"]), ctx, [(f, _mtime(f)) for f in files])
         return ctx
 
     def word_at(self, uri, pos):
@@ -1154,11 +1326,12 @@ class Server:
         if not m or m.group(1) == "<":
             return None
         path = uri_to_path(uri)
-        return self.index.resolve(m.group(2).strip(), os.path.dirname(path))
+        return self.index.resolve(m.group(2).strip(), os.path.dirname(path), self.config(path))
 
     def relname(self, path, uri=None):
-        if self.basilisk and path.startswith(self.basilisk + os.sep):
-            return os.path.relpath(path, self.basilisk)
+        root = self.config(uri_to_path(uri))["root"] if uri else None
+        if root and path.startswith(root + os.sep):
+            return os.path.relpath(path, root)
         if uri:
             d = os.path.dirname(uri_to_path(uri))
             if path.startswith(d + os.sep):
@@ -1182,6 +1355,20 @@ class Server:
         elif b and not parts:
             parts.append("```c\n" + b[1] + "\n```\n" + b[2])
         return "\n\n".join(parts)
+
+    def sym_range(self, s, uri):
+        """LSP range of a symbol's name (UTF-16 columns)."""
+        if s.path == uri_to_path(uri) and uri in self.docs:
+            lines = self.docs[uri]["text"].split("\n")
+        else:
+            try:
+                with open(s.path, encoding="utf-8", errors="replace") as f:
+                    lines = f.read().split("\n")
+            except OSError:
+                lines = []
+        line = lines[s.line] if s.line < len(lines) else ""
+        return {"start": {"line": s.line, "character": idx_to_u16(line, s.col)},
+                "end": {"line": s.line, "character": idx_to_u16(line, s.col + len(s.name))}}
 
     # -- requests
     def on_textDocument_hover(self, p):
@@ -1214,9 +1401,7 @@ class Server:
         out = []
         for s in table.get(word, [])[:30]:
             u = uri if s.path == uri_to_path(uri) else path_to_uri(s.path)
-            out.append({"uri": u, "range": {
-                "start": {"line": s.line, "character": s.col},
-                "end": {"line": s.line, "character": s.col + len(s.name)}}})
+            out.append({"uri": u, "range": self.sym_range(s, uri)})
         return out or None
 
     def on_textDocument_documentSymbol(self, p):
@@ -1226,9 +1411,7 @@ class Server:
         for s in fi.symbols:
             name = s.name if s.kind != "event" else "event " + s.name
             out.append({"name": name, "kind": SK.get(s.kind, 13), "detail": s.sig,
-                        "location": {"uri": uri, "range": {
-                            "start": {"line": s.line, "character": 0},
-                            "end": {"line": s.line, "character": len(s.name) + s.col}}}})
+                        "location": {"uri": uri, "range": self.sym_range(s, uri)}})
         return out
 
     def on_textDocument_completion(self, p):
@@ -1247,7 +1430,7 @@ class Server:
             start = i - len(typed)
             items = []
             d = os.path.dirname(uri_to_path(uri))
-            for rel, absp in self.index.header_list(d):
+            for rel, absp in self.index.header_list(self.config(uri_to_path(uri)), d):
                 k = str(len(self.resolve_store))
                 self.resolve_store[k] = ("header", absp)
                 items.append({"label": rel, "kind": CIK["file"], "data": {"k": k},
@@ -1292,11 +1475,11 @@ class Server:
         # local symbols first
         for s in fi.symbols:
             k = str(len(self.resolve_store))
-            self.resolve_store[k] = ("sym", s.name)
+            self.resolve_store[k] = ("sym", s.name, uri)
             item(s.name, s.kind, s.sig, "0", k)
         for name, (kind, sig, _) in BUILTINS.items():
             k = str(len(self.resolve_store))
-            self.resolve_store[k] = ("sym", name)
+            self.resolve_store[k] = ("sym", name, uri)
             item(name, kind, sig, "1", k, SNIPPETS.get(name))
         for name in SNIPPETS:
             item(name, "snippet", "", "1", None, SNIPPETS[name])
@@ -1305,7 +1488,7 @@ class Server:
             if s.path == path:
                 continue
             k = str(len(self.resolve_store))
-            self.resolve_store[k] = ("sym", name)
+            self.resolve_store[k] = ("sym", name, uri)
             item(name, s.kind, s.sig + "  — " + self.relname(s.path, uri), "2", k)
         for w in C_KEYWORDS:
             item(w, "keyword", "", "3")
@@ -1326,14 +1509,8 @@ class Server:
             item["documentation"] = {"kind": "markdown",
                                      "value": (f"**{t}**\n\n" if t else "") + entry[1]}
             return item
-        name = entry[1]
-        uri = None
-        for u, d in self.docs.items():
-            if d.get("_ctx"):
-                uri = u
-        syms = []
-        if uri:
-            syms = self.context(uri)[2].get(name, [])
+        _, name, uri = entry
+        syms = self.context(uri)[2].get(name, []) if uri in self.docs else []
         md = self.markdown(name, syms, uri)
         if md:
             item["documentation"] = {"kind": "markdown", "value": md}
@@ -1357,9 +1534,7 @@ def apply_change(text, ch):
 # Command line
 
 def lint(path, flags):
-    server = Server()
-    if flags:
-        server.cfg["qccFlags"] = flags
+    server = Server(extra_flags=flags)
     with open(path, encoding="utf-8", errors="replace") as f:
         text = f.read()
     diags, err = check(server, path, text)
@@ -1367,10 +1542,13 @@ def lint(path, flags):
         print(f"{path}:1:1: error: {err}")
         return 2
     names = {1: "error", 2: "warning", 3: "note"}
+    lines = text.split("\n")
     for d in diags:
         s = d["range"]["start"]
+        line = lines[s["line"]] if s["line"] < len(lines) else ""
+        col = u16_to_idx(line, s["character"]) + 1
         msg = d["message"].replace("\n", " ")
-        print(f"{path}:{s['line'] + 1}:{s['character'] + 1}: {names[d['severity']]}: {msg}")
+        print(f"{path}:{s['line'] + 1}:{col}: {names[d['severity']]}: {msg}")
     return 1 if any(d["severity"] == 1 for d in diags) else 0
 
 
@@ -1378,6 +1556,11 @@ def main(argv):
     if "--version" in argv:
         print("basilisk-lsp", VERSION)
         return 0
+    if "--config" in argv:
+        rest = argv[argv.index("--config") + 1:]
+        cfg = Server().config(rest[0] if rest else os.path.join(os.getcwd(), "x.c"))
+        print(json.dumps({k: v for k, v in cfg.items() if k != "key"}, indent=2))
+        return 1 if cfg["errors"] else 0
     if "--lint" in argv:
         i = argv.index("--lint")
         rest = argv[i + 1:]

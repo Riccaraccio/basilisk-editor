@@ -27,8 +27,8 @@ async function maybeSwitch(doc) {
 function settings() {
   const c = cfg();
   return {
-    basilisk: c.get('basilisk'), qcc: c.get('qcc'), qccFlags: c.get('qccFlags'),
-    diagnostics: c.get('diagnostics'), debounce: c.get('debounce'),
+    basiliskPath: c.get('path'), qcc: c.get('qcc'), qccFlags: c.get('qccFlags'),
+    includeDirs: c.get('includeDirs'), diagnostics: c.get('diagnostics'), debounce: c.get('debounce'),
   };
 }
 
