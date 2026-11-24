@@ -132,7 +132,7 @@ Each phase ends in a state that could be shared. Phases 1–3 are needed before 
 New tests: `tests/test_config.py` (9 unit tests: precedence, project files, discovery, columns) and, in `tests/test_lsp.py`, B1, the onSave default, and onChange via settings.
 
 **Still open:**
-- vim-plug and lazy.nvim installing *from the GitHub URL* with an empty `$HOME`. The sandbox here blocks downloading and running those plugin managers; your own lazy.nvim, with `dir =` pointing at the checkout, uses the same loading path.
+- vim-plug installing *from the GitHub URL* (the sandbox here blocks downloading and running plugin managers). **lazy.nvim from the URL is verified** (2026-11-24): `{ "Riccaraccio/basilisk-editor" }` cloned commit b280615 from GitHub and loads it on startup. Native packages cloned from the URL are verified too.
 - The VS Code extension has been rebuilt and installed but not yet watched running in the editor.
 - The version check runs when the `.vsix` is built; making CI run it belongs to Phase 3.
 
