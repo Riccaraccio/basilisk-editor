@@ -170,7 +170,19 @@ python3 -m unittest discover -s tests            # add BASILISK_LSP_SLOW=1 to al
 cd tests/vscode && npm ci && npm test            # VS Code grammar
 ```
 
-Tests that need Basilisk, or a particular editor, skip themselves when it isn't installed. Diagnostics are tested without qcc by replaying recorded qcc runs (`tests/fixtures/diagnostics`). After changing those cases, or when qcc's messages change, re-record them with `python3 tests/record_fixtures.py` and review the diff of `expected.json`.
+Tests that need Basilisk, or a particular editor, skip themselves when it isn't installed. Diagnostics are tested without qcc by replaying recorded qcc runs (`tests/fixtures/diagnostics`).
+
+**With Basilisk installed, run the full suite locally before pushing.** GitHub's CI can't download Basilisk (basilisk.fr refuses its servers), so these tests only run on your machine:
+- the end-to-end protocol test;
+- qcc errors in vim, neovim, Emacs and nano;
+- Basilisk's sources and examples as a corpus.
+
+```sh
+BASILISK_LSP_SLOW=1 python3 -m unittest discover -s tests     # $BASILISK set, or qcc on PATH
+python3 tests/record_fixtures.py && git diff --stat tests/fixtures   # did qcc's messages change?
+```
+
+After changing the diagnostics cases, or when qcc's messages change, re-record them with `python3 tests/record_fixtures.py` and review the diff of `expected.json`.
 
 **Releases.** Bump the version in `server/basilisk_lsp.py`, `vscode/package.json` and `basilisk-editor.el` (CI checks they agree), then push a `vX.Y.Z` tag. The release workflow builds the `.vsix` and attaches it to a GitHub release.
 

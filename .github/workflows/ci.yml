@@ -9,6 +9,9 @@ jobs:
   # Server, generator and diagnostics tests (no qcc needed: recorded
   # outputs are replayed), on the oldest and newest supported Pythons and
   # on macOS. Editor and Basilisk tests skip themselves here.
+  #
+  # Tests needing a real Basilisk (qcc) run locally only: basilisk.fr
+  # refuses connections from GitHub's runners (decision D6 in PLAN.md).
   unit:
     name: unit (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
@@ -61,73 +64,6 @@ jobs:
         run: npm ci && npm test
       - name: Editor tests
         run: python3 -m unittest tests.test_editors tests.test_generate -v
-
-  # Everything, with a real Basilisk (official tarball, rebuilt weekly):
-  # qcc diagnostics in every editor, end-to-end protocol test, Basilisk's
-  # sources and examples as a corpus.
-  basilisk:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install vim, Emacs, nano, tmux and Basilisk's build tools
-        run: sudo apt-get update && sudo apt-get install -y vim emacs-nox nano tmux flex bison gawk
-      - uses: rhysd/action-setup-vim@v1
-        with:
-          neovim: true
-          version: stable
-      - name: Week
-        id: week
-        run: echo "week=$(date +%G-%V)" >> "$GITHUB_OUTPUT"
-      - name: Cache Basilisk
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: ~/basilisk
-          key: basilisk-${{ runner.os }}-${{ steps.week.outputs.week }}
-      - name: Download Basilisk
-        id: fetch
-        if: steps.cache.outputs.cache-hit != 'true'
-        env:
-          # basilisk.fr does not accept connections from GitHub's runners:
-          # set the repository variable BASILISK_TARBALL_URL to a copy of
-          # https://basilisk.fr/basilisk/basilisk.tar.gz reachable from them.
-          MIRROR: ${{ vars.BASILISK_TARBALL_URL }}
-        run: |
-          cd ~
-          for url in $MIRROR https://basilisk.fr/basilisk/basilisk.tar.gz; do
-            echo "trying $url"
-            if curl -fsSL --retry 2 --retry-delay 5 --connect-timeout 20 -o basilisk.tar.gz "$url"; then
-              echo "ok=true" >> "$GITHUB_OUTPUT"; exit 0
-            fi
-          done
-          echo "ok=false" >> "$GITHUB_OUTPUT"
-          echo "::warning title=Basilisk unavailable::Could not download Basilisk (basilisk.fr refuses GitHub's runners; set the BASILISK_TARBALL_URL repository variable). The tests needing qcc were skipped."
-      - name: Build Basilisk (qcc)
-        if: steps.fetch.outputs.ok == 'true'
-        run: |
-          cd ~
-          tar xzf basilisk.tar.gz
-          cd basilisk/src
-          ln -s config.gcc config
-          make ast        # qcc's parser library (built by `make all` via subdirs)
-          make qcc
-      - name: Basilisk environment
-        if: steps.cache.outputs.cache-hit == 'true' || steps.fetch.outputs.ok == 'true'
-        run: |
-          echo "BASILISK=$HOME/basilisk/src" >> "$GITHUB_ENV"
-          echo "$HOME/basilisk/src" >> "$GITHUB_PATH"
-      - name: Tests (all, including the slow corpus test)
-        env:
-          BASILISK_LSP_SLOW: "1"
-        run: python3 -m unittest discover -s tests -v
-      - name: Recorded qcc outputs still match this Basilisk
-        if: env.BASILISK != ''
-        # informative: when qcc's messages change upstream, re-record with
-        # tests/record_fixtures.py and review the expected.json changes
-        continue-on-error: true
-        run: |
-          python3 tests/record_fixtures.py
-          git diff --stat --exit-code tests/fixtures
 
   # The VS Code extension builds with the official packager (as on release).
   vsix:

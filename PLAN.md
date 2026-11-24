@@ -79,7 +79,7 @@ In practice that means:
 | D2 | Hosting | **Decided and done:** public GitHub repository, https://github.com/Riccaraccio/basilisk-editor |
 | D3 | Name and IDs | **Postponed:** there is no publisher ID yet. Until there is one, the `.vsix` is distributed as a release download; marketplace publishing (part of Phase 3, step 6) waits. The repository name stays `basilisk-editor`. |
 | D4 | Default diagnostics mode | **Decided: `onChange`** (check while typing), changed from `onSave` on 2026-11-24 at the maintainer's request. `onSave` stays available for busy shared machines (project file or editor settings). |
-| D6 | Basilisk for CI | **Open.** basilisk.fr refuses GitHub's runners. Options: (a) keep a copy of the official tarball as a release asset of this repository (GPL allows it; refreshed by hand) and point the `BASILISK_TARBALL_URL` repository variable at it; (b) keep qcc tests local only; (c) ask basilisk.fr's admins to allow GitHub's runners. Recommendation: (a). |
+| D6 | Basilisk for CI | **Decided (2026-11-24): local only.** basilisk.fr refuses GitHub's runners, and the maintainer doesn't want a copy of the tarball that would need regular updates. The tests needing qcc run locally whenever Basilisk is installed; CI runs everything else. The diagnostics logic is still covered on every push by the replayed fixtures. |
 | D5 | Upstream | Open. Once it has had a beta, consider proposing it to Basilisk's maintainers (a link from basilisk.fr, or shipping it next to `basilisk-mode.el`). |
 
 ## The plan
@@ -159,7 +159,7 @@ New tests: `tests/test_config.py` (9 unit tests: precedence, project files, disc
 - Also changed: the default diagnostics mode is now `onChange` (see D4).
 - CI running `--check` is part of Phase 3.
 
-### Phase 3: tests and CI *(fixes D; done, except qcc tests on GitHub, see status)*
+### Phase 3: tests and CI *(fixes D; done)*
 
 1. **Unit tests that need no qcc:**
    - the scanner, against fixture files;
@@ -199,10 +199,15 @@ New tests: `tests/test_config.py` (9 unit tests: precedence, project files, disc
 - **CI on GitHub: all 7 jobs green** (run 45387659909):
   - unit: Python 3.8 and 3.13, Ubuntu and macOS;
   - editors: neovim 0.11.0 and stable;
-  - basilisk;
+  - basilisk (since removed, see D6);
   - vsix: the official `vsce` builds the extension on every push; the artifact was downloaded and checked to contain the server and `vscode-languageclient`.
 - **Found by CI:** on macOS, errors reported in Basilisk headers showed absolute paths when Basilisk is reached through a symlink (`/var` → `/private/var`). Fixed, with a regression test.
-- **Open, needs a decision (D6):** basilisk.fr doesn't accept connections from GitHub's runners. TCP connections time out, also over IPv4, while it answers normally elsewhere. So the qcc-dependent tests (end-to-end protocol, qcc diagnostics in each editor, the examples corpus, the fixture drift check) run only locally for now. The Basilisk job warns when that happens. The replayed fixtures still test the diagnostics logic on every push. Building Basilisk itself works (`make ast && make qcc`).
+- **qcc tests run locally (D6):** basilisk.fr doesn't accept connections from GitHub's runners (TCP connections time out, also over IPv4). The 6 tests needing qcc therefore run locally:
+  - the end-to-end protocol test;
+  - vim `:make` and the nano linter;
+  - the three corpus tests.
+
+  The neovim and Emacs tests also check qcc diagnostics when run locally. The README says to run the full suite before pushing. The Basilisk CI job was removed, since it could never download Basilisk.
 
 ### Phase 4: documentation and more editors *(fixes E)*
 
