@@ -9,6 +9,8 @@ Thanks for helping. Bug reports, editor reports ("the Helix configuration works 
 - **Every change comes with a test** (see below), and the README is updated when behaviour or configuration changes.
 - **Versions:** the version number lives in `server/basilisk_lsp.py`, `vscode/package.json` and `basilisk-editor.el`, and CI checks that they agree.
 
+AI coding agents: [AGENTS.md](AGENTS.md) summarises the commands, the rules and the pitfalls (`CLAUDE.md` imports it for Claude Code).
+
 ## Layout
 
 | Path | What |

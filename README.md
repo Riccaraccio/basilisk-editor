@@ -161,7 +161,7 @@ Basilisk sources are ordinary `.c`/`.h` files, so vim, Emacs and VS Code recogni
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md): the layout, the ground rules, how to run the tests (with Basilisk installed, run the full suite before pushing), how to add a diagnostics case, and how to release. Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the roadmap is in [PLAN.md](PLAN.md).
+AI coding agents: see [AGENTS.md](AGENTS.md). Everyone else: see [CONTRIBUTING.md](CONTRIBUTING.md): the layout, the ground rules, how to run the tests (with Basilisk installed, run the full suite before pushing), how to add a diagnostics case, and how to release. Changes are listed in [CHANGELOG.md](CHANGELOG.md), and the roadmap is in [PLAN.md](PLAN.md).
 
 In short: to add or change a keyword, built-in or its documentation, edit `spec/language.json` and run `python3 tools/generate.py`. Run the tests with `python3 -m unittest discover -s tests`.
 
