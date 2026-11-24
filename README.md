@@ -156,13 +156,23 @@ bin/basilisk-lsp           launcher (POSIX sh)
 server/basilisk_lsp.py     language server, --lint, --config
 nano/basilisk.nanorc
 vscode/                    extension; build.sh builds the .vsix (no Node 20 needed)
-tests/                     python3 tests/test_config.py   (unit tests, no qcc needed)
-                           python3 tests/test_generate.py (generated files, detection in vim/node/emacs)
-                           python3 tests/test_lsp.py      (end-to-end, needs Basilisk)
+tests/                     test suite (see below); fixtures/ holds the test cases
+.github/workflows/         ci.yml (every push and pull request), release.yml (v* tags)
 install.sh                 optional installer (bin, vim, nvim, nano, vscode)
 ```
 
 To add or change a keyword, built-in or its documentation, edit `spec/language.json` and run `python3 tools/generate.py`. Don't edit the `GENERATED … END GENERATED` blocks by hand.
+
+**Tests.** Run them all with:
+
+```sh
+python3 -m unittest discover -s tests            # add BASILISK_LSP_SLOW=1 to also lint all of src/examples
+cd tests/vscode && npm ci && npm test            # VS Code grammar
+```
+
+Tests that need Basilisk, or a particular editor, skip themselves when it isn't installed. Diagnostics are tested without qcc by replaying recorded qcc runs (`tests/fixtures/diagnostics`). After changing those cases, or when qcc's messages change, re-record them with `python3 tests/record_fixtures.py` and review the diff of `expected.json`.
+
+**Releases.** Bump the version in `server/basilisk_lsp.py`, `vscode/package.json` and `basilisk-editor.el` (CI checks they agree), then push a `vX.Y.Z` tag. The release workflow builds the `.vsix` and attaches it to a GitHub release.
 
 See [PLAN.md](PLAN.md) for the roadmap.
 

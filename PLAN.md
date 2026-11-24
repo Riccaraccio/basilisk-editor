@@ -158,7 +158,7 @@ New tests: `tests/test_config.py` (9 unit tests: precedence, project files, disc
 - Also changed: the default diagnostics mode is now `onChange` (see D4).
 - CI running `--check` is part of Phase 3.
 
-### Phase 3: tests and CI *(fixes D)*
+### Phase 3: tests and CI *(fixes D; in progress, see status)*
 
 1. **Unit tests that need no qcc:**
    - the scanner, against fixture files;
@@ -180,6 +180,21 @@ New tests: `tests/test_config.py` (9 unit tests: precedence, project files, disc
 6. **Release workflow:** on a git tag, build the `.vsix` with the official `vsce` on Node 20 (the Python packager stays as a local fallback), attach it to the GitHub release, and publish to Open VSX and the VS Code Marketplace.
 
 **Done when:** every pull request runs the whole matrix, and a tag produces a published extension.
+
+**Status (2026-11-24):**
+- **One command:** `python3 -m unittest discover -s tests` runs 46 tests locally, all passing (3 minutes with `BASILISK_LSP_SLOW=1`). Tests needing Basilisk or an editor skip themselves.
+- **Unit tests without qcc:**
+  - `test_scan` covers the scanner;
+  - `test_config` covers configuration, discovery, columns, and the launcher through symlinks;
+  - `test_diagnostics` replays 8 recorded qcc scenarios through the whole checking path: parse errors, an error reported inside an expanded `foreach`, an unparseable file, dimensional analysis, project flags, and the three header modes. A deliberately broken mapping makes 5 of them fail, so they have teeth.
+- **Protocol:** `test_lsp` now runs under `unittest`.
+- **Editors:** `test_editors` runs vim, neovim, Emacs and nano headless with an empty `$HOME`; `tests/vscode` checks the grammar through `vscode-textmate`.
+- **Corpus:** `test_corpus` scans all of Basilisk's sources and lints the examples.
+- **CI:** `ci.yml` has three jobs:
+  - unit: Python 3.8/3.13, Ubuntu and macOS;
+  - editors: neovim 0.11 and stable;
+  - full: Basilisk built from the official tarball, cached weekly. A non-blocking step reports when qcc's messages drift from the recorded fixtures.
+- **Release:** `release.yml` builds the `.vsix` with the official `vsce` on a `v*` tag and attaches it to a GitHub release. Marketplace publishing is wired but waits for secrets (D3).
 
 ### Phase 4: documentation and more editors *(fixes E)*
 

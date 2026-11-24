@@ -69,8 +69,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install vim, Emacs, nano, tmux
-        run: sudo apt-get update && sudo apt-get install -y vim emacs-nox nano tmux
+      - name: Install vim, Emacs, nano, tmux and Basilisk's build tools
+        run: sudo apt-get update && sudo apt-get install -y vim emacs-nox nano tmux flex bison gawk
       - uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
@@ -92,8 +92,8 @@ jobs:
           tar xzf basilisk.tar.gz
           cd basilisk/src
           ln -s config.gcc config
-          make -k qcc || make qcc
-          ./qcc --version || true
+          make ast        # qcc's parser library (built by `make all` via subdirs)
+          make qcc
       - name: Basilisk environment
         run: |
           echo "BASILISK=$HOME/basilisk/src" >> "$GITHUB_ENV"

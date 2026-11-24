@@ -95,5 +95,21 @@ class Parsing(unittest.TestCase):
         self.assertEqual(raw[0][5], "init_0")
 
 
+class SymlinkedBasilisk(unittest.TestCase):
+    """Reported paths are resolved (realpath); Basilisk reached through a
+    symlink (e.g. macOS /var -> /private/var) must still give short names."""
+
+    def test_reported_in_short_name(self):
+        real = tempfile.mkdtemp()
+        open(os.path.join(real, "common.h"), "w").close()
+        link = real + "-link"
+        os.symlink(real, link)
+        cfg = b.resolve_config({"basiliskPath": link}, os.path.join(real, "x.c"))
+        self.assertEqual(cfg["root"], link)
+        raw = [[os.path.join(os.path.realpath(real), "timestep.h"), 12, None, "error", "boom", None]]
+        diags = b.make_diagnostics(cfg, "/elsewhere/x.c", "int x;\n", raw)
+        self.assertEqual(diags[0]["message"], "boom  [reported in timestep.h:12]")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

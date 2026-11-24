@@ -1037,8 +1037,9 @@ def make_diagnostics(cfg, path, text, raw, foreign=True):
             if nforeign > MAX_FOREIGN:
                 continue
             rel = f
-            if cfg["root"] and f.startswith(cfg["root"] + os.sep):
-                rel = os.path.relpath(f, cfg["root"])
+            for root in {cfg["root"], os.path.realpath(cfg["root"])} if cfg["root"] else ():
+                if f.startswith(root + os.sep):   # reported paths are resolved (symlinks)
+                    rel = os.path.relpath(f, root)
             text_msg += f"  [reported in {rel}:{line}]"
             anchor = None
             if ctx:
@@ -1348,8 +1349,9 @@ class Server:
 
     def relname(self, path, uri=None):
         root = self.config(uri_to_path(uri))["root"] if uri else None
-        if root and path.startswith(root + os.sep):
-            return os.path.relpath(path, root)
+        for r in {root, os.path.realpath(root)} if root else ():
+            if path.startswith(r + os.sep):
+                return os.path.relpath(path, r)
         if uri:
             d = os.path.dirname(uri_to_path(uri))
             if path.startswith(d + os.sep):
