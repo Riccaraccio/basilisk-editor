@@ -1,0 +1,409 @@
+{
+  "$comment": [
+    "Single source of the Basilisk C language knowledge used by every editor.",
+    "After editing, run: python3 tools/generate.py   (CI runs --check).",
+    "highlight: word lists, by category; 'prefixes' match any identifier starting with them.",
+    "detect: what makes a .c/.h file Basilisk C (any line matching, in the first max_lines).",
+    "docs: hover/completion documentation of built-in constructs (markdown). snippets: LSP snippets."
+  ],
+  "highlight": {
+    "loop": {
+      "words": [
+        "foreach"
+      ],
+      "prefixes": [
+        "foreach_"
+      ]
+    },
+    "statement": {
+      "words": [
+        "event",
+        "reduction"
+      ]
+    },
+    "event_condition": {
+      "words": [
+        "first",
+        "last",
+        "end"
+      ],
+      "$comment": "only highlighted on `event` lines (nano can't do that and skips them)"
+    },
+    "type": {
+      "words": [
+        "scalar",
+        "vector",
+        "tensor",
+        "coord",
+        "Point"
+      ]
+    },
+    "qualifier": {
+      "words": [
+        "face",
+        "vertex",
+        "symmetric",
+        "trace",
+        "macro"
+      ],
+      "literals": [
+        "(const)"
+      ]
+    },
+    "operator": {
+      "words": [
+        "new",
+        "delete"
+      ]
+    },
+    "builtin": {
+      "words": [
+        "Delta",
+        "point",
+        "level",
+        "dimension"
+      ]
+    },
+    "constant": {
+      "words": [
+        "left",
+        "right",
+        "top",
+        "bottom",
+        "front",
+        "back",
+        "nodata"
+      ]
+    },
+    "function": {
+      "words": [
+        "dirichlet",
+        "neumann",
+        "dirichlet_homogeneous",
+        "neumann_homogeneous",
+        "periodic",
+        "val",
+        "fine",
+        "coarse",
+        "neighbor"
+      ]
+    }
+  },
+  "detect": {
+    "max_lines": 500,
+    "include_prefixes": [
+      "navier-stokes",
+      "grid",
+      "two-phase",
+      "vof",
+      "saint-venant",
+      "layered",
+      "embed",
+      "tension",
+      "run",
+      "utils",
+      "output",
+      "view",
+      "fractions",
+      "axi",
+      "reduced",
+      "curvature",
+      "tracer",
+      "diffusion",
+      "poisson",
+      "green-naghdi",
+      "compressible",
+      "bcg",
+      "advection",
+      "atmosphere",
+      "momentum",
+      "contact",
+      "heights",
+      "common"
+    ],
+    "field_qualifiers": [
+      "face",
+      "vertex",
+      "symmetric"
+    ],
+    "field_types": [
+      "scalar",
+      "vector",
+      "tensor"
+    ]
+  },
+  "docs": {
+    "foreach": {
+      "kind": "keyword",
+      "sig": "foreach (reduction(op:var) ...) statement",
+      "doc": "Loops over all the leaf cells of the grid (in parallel with OpenMP/MPI).\n\nInside the loop: `x`, `y`, `z` are the coordinates of the cell centre, `Delta` is the cell size, `point` the current `Point`, and fields are accessed through stencils: `s[]`, `s[1]`, `s[-1,0]`, `s[0,1]`...\n\nGlobal accumulations must be declared with `reduction(+:sum)` (also `min`, `max`)."
+    },
+    "foreach_face": {
+      "kind": "keyword",
+      "sig": "foreach_face (x|y|z, reduction(...)) statement",
+      "doc": "Loops over the faces of the leaf cells. The body is written for the *x* direction and automatically rotated for the other directions (as with `foreach_dimension()`); `foreach_face(x)` restricts the loop to the *x* faces. Use it to update `face vector` fields: `uf.x[]` is the value on the face between `[-1]` and `[]`."
+    },
+    "foreach_vertex": {
+      "kind": "keyword",
+      "sig": "foreach_vertex () statement",
+      "doc": "Loops over the vertices of the leaf cells (for `vertex` fields)."
+    },
+    "foreach_dimension": {
+      "kind": "keyword",
+      "sig": "foreach_dimension () statement",
+      "doc": "Repeats the following statement (or function definition) for each dimension, rotating `x`→`y`→`z` in component names (`.x`, `_x`) and stencil indices."
+    },
+    "foreach_level": {
+      "kind": "keyword",
+      "sig": "foreach_level (int l) statement",
+      "doc": "Loops over all the cells at level `l` of the tree."
+    },
+    "foreach_level_or_leaf": {
+      "kind": "keyword",
+      "sig": "foreach_level_or_leaf (int l) statement",
+      "doc": "Loops over the cells at level `l` and the leaf cells coarser than `l`."
+    },
+    "foreach_coarse_level": {
+      "kind": "keyword",
+      "sig": "foreach_coarse_level (int l) statement",
+      "doc": "Loops over the non-leaf cells at level `l`."
+    },
+    "foreach_leaf": {
+      "kind": "keyword",
+      "sig": "foreach_leaf () statement",
+      "doc": "Loops over the leaf cells (equivalent to `foreach()`)."
+    },
+    "foreach_cell": {
+      "kind": "keyword",
+      "sig": "foreach_cell () statement",
+      "doc": "Depth-first traversal of the whole tree, starting from the root. Use `continue` to skip the children of the current cell and `is_leaf(cell)` to detect leaves."
+    },
+    "foreach_child": {
+      "kind": "keyword",
+      "sig": "foreach_child () statement",
+      "doc": "Loops over the children of the current cell."
+    },
+    "foreach_neighbor": {
+      "kind": "keyword",
+      "sig": "foreach_neighbor (int n = 2) statement",
+      "doc": "Loops over the neighbours of the current cell, within a stencil of half-width `n`."
+    },
+    "foreach_boundary": {
+      "kind": "keyword",
+      "sig": "foreach_boundary (int b) statement",
+      "doc": "Loops over the cells adjacent to boundary `b` (e.g. `left`)."
+    },
+    "foreach_point": {
+      "kind": "keyword",
+      "sig": "foreach_point (double x, double y, double z) statement",
+      "doc": "Executes the statement on the leaf cell containing the point (x, y, z)."
+    },
+    "foreach_fine_to_coarse": {
+      "kind": "keyword",
+      "sig": "foreach_fine_to_coarse () statement",
+      "doc": "Loops over the non-leaf cells, from the finest to the coarsest level."
+    },
+    "foreach_block": {
+      "kind": "keyword",
+      "sig": "foreach_block () statement",
+      "doc": "Loops over the blocks/layers of block data (multilayer solver)."
+    },
+    "foreach_layer": {
+      "kind": "keyword",
+      "sig": "foreach_layer () statement",
+      "doc": "Loops over the layers (multilayer solver). Inside, `point.l` is the layer index."
+    },
+    "event": {
+      "kind": "keyword",
+      "sig": "event name (condition; ...) { ... }",
+      "doc": "Defines an event, executed by `run()` when its conditions are met.\n\nConditions: `i = 0`, `i++`, `i += 10`, `t = 0`, `t += 0.1`, `t <= 10`, `t = end`, `first`, `last`, `t = {0, 1, 2}`... Events with the same name as an existing event (e.g. `init`, `logfile`, `adapt`) are added to it; returning 1 stops the run."
+    },
+    "reduction": {
+      "kind": "keyword",
+      "sig": "reduction (op : var)",
+      "doc": "Declares a parallel reduction for a `foreach` loop. `op` is `+`, `min` or `max`; `var` is a variable or an array `var[:n]`."
+    },
+    "scalar": {
+      "kind": "type",
+      "sig": "scalar s[];",
+      "doc": "A scalar field. Global or local declarations `scalar s[];` allocate the field (local fields are freed automatically at the end of the scope); `scalar s = new scalar;` allocates dynamically. Values are accessed inside `foreach` loops as `s[]`, `s[1,0]`..."
+    },
+    "vector": {
+      "kind": "type",
+      "sig": "vector u[];",
+      "doc": "A vector field, with components `u.x`, `u.y` (and `u.z`)."
+    },
+    "tensor": {
+      "kind": "type",
+      "sig": "tensor T[];",
+      "doc": "A tensor field, with components `T.x.x`, `T.x.y`, ..."
+    },
+    "face": {
+      "kind": "keyword",
+      "sig": "face vector uf[];",
+      "doc": "Qualifier: a `face vector` is staggered on cell faces (`uf.x[]` lives on the face between `[-1]` and `[]`)."
+    },
+    "vertex": {
+      "kind": "keyword",
+      "sig": "vertex scalar s[];",
+      "doc": "Qualifier: a `vertex scalar` is defined on cell vertices."
+    },
+    "symmetric": {
+      "kind": "keyword",
+      "sig": "symmetric tensor T[];",
+      "doc": "Qualifier: a symmetric tensor (`T.x.y` and `T.y.x` share storage)."
+    },
+    "new": {
+      "kind": "keyword",
+      "sig": "new scalar | new vector | new face vector ...",
+      "doc": "Dynamically allocates a new field; free it with `delete ({s});`."
+    },
+    "delete": {
+      "kind": "function",
+      "sig": "void delete (scalar * list)",
+      "doc": "Frees the fields in `list`."
+    },
+    "trace": {
+      "kind": "keyword",
+      "sig": "trace",
+      "doc": "Marks the following function for profiling (`-DTRACE`)."
+    },
+    "macro": {
+      "kind": "keyword",
+      "sig": "macro [type] name (args) { ... }",
+      "doc": "Basilisk macro: a function-like definition inlined by qcc, which can take a code block as its last argument."
+    },
+    "Delta": {
+      "kind": "variable",
+      "sig": "double Delta",
+      "doc": "Size of the current cell (inside `foreach`-type loops)."
+    },
+    "x": {
+      "kind": "variable",
+      "sig": "double x",
+      "doc": "*x*-coordinate of the current cell (or face) centre."
+    },
+    "y": {
+      "kind": "variable",
+      "sig": "double y",
+      "doc": "*y*-coordinate of the current cell (or face) centre."
+    },
+    "z": {
+      "kind": "variable",
+      "sig": "double z",
+      "doc": "*z*-coordinate of the current cell (or face) centre."
+    },
+    "t": {
+      "kind": "variable",
+      "sig": "double t",
+      "doc": "Physical time."
+    },
+    "dt": {
+      "kind": "variable",
+      "sig": "double dt",
+      "doc": "Current timestep."
+    },
+    "i": {
+      "kind": "variable",
+      "sig": "int i",
+      "doc": "Iteration (timestep) counter."
+    },
+    "point": {
+      "kind": "variable",
+      "sig": "Point point",
+      "doc": "The current cell, inside `foreach`-type loops."
+    },
+    "level": {
+      "kind": "variable",
+      "sig": "int level",
+      "doc": "Level of the current cell (inside loops)."
+    },
+    "dimension": {
+      "kind": "define",
+      "sig": "dimension",
+      "doc": "Number of space dimensions (1, 2 or 3)."
+    },
+    "val": {
+      "kind": "macro",
+      "sig": "val (s, i, j, k)",
+      "doc": "Explicit stencil access, equivalent to `s[i,j,k]`."
+    },
+    "fine": {
+      "kind": "macro",
+      "sig": "fine (s, i, j, k)",
+      "doc": "Value of field `s` in child cell (i, j, k)."
+    },
+    "coarse": {
+      "kind": "macro",
+      "sig": "coarse (s, i, j, k)",
+      "doc": "Value of field `s` in the parent cell."
+    },
+    "neighbor": {
+      "kind": "macro",
+      "sig": "neighbor (i, j, k)",
+      "doc": "The neighbouring `Point` at offset (i, j, k)."
+    },
+    "left": {
+      "kind": "variable",
+      "sig": "left",
+      "doc": "Left boundary (e.g. `u.n[left] = dirichlet(0);`)."
+    },
+    "right": {
+      "kind": "variable",
+      "sig": "right",
+      "doc": "Right boundary."
+    },
+    "top": {
+      "kind": "variable",
+      "sig": "top",
+      "doc": "Top boundary."
+    },
+    "bottom": {
+      "kind": "variable",
+      "sig": "bottom",
+      "doc": "Bottom boundary."
+    },
+    "front": {
+      "kind": "variable",
+      "sig": "front",
+      "doc": "Front boundary (3D)."
+    },
+    "back": {
+      "kind": "variable",
+      "sig": "back",
+      "doc": "Back boundary (3D)."
+    },
+    "in": {
+      "kind": "keyword",
+      "sig": "for (scalar s in list)",
+      "doc": "Iterates over the fields of a list."
+    },
+    "first": {
+      "kind": "keyword",
+      "sig": "first",
+      "doc": "Event condition: first."
+    },
+    "last": {
+      "kind": "keyword",
+      "sig": "last",
+      "doc": "Event condition: last (executed after all other events of the same name)."
+    },
+    "end": {
+      "kind": "keyword",
+      "sig": "t = end",
+      "doc": "Event condition: the end of the run."
+    }
+  },
+  "snippets": {
+    "foreach": "foreach() {\n\t$0\n}",
+    "foreach_face": "foreach_face() {\n\t$0\n}",
+    "foreach_vertex": "foreach_vertex() {\n\t$0\n}",
+    "foreach_dimension": "foreach_dimension()\n\t$0",
+    "foreach_level": "foreach_level(${1:l}) {\n\t$0\n}",
+    "foreach_neighbor": "foreach_neighbor(${1:1}) {\n\t$0\n}",
+    "foreach_child": "foreach_child() {\n\t$0\n}",
+    "foreach_boundary": "foreach_boundary(${1:left}) {\n\t$0\n}",
+    "event": "event ${1:name} (${2:i++}) {\n\t$0\n}",
+    "reduction": "reduction(${1|+,min,max|}:${2:var})"
+  }
+}

@@ -78,7 +78,7 @@ In practice that means:
 | D1 | License | **Decided: GPL-3.0-or-later**, Basilisk's license. `LICENSE` is a copy of Basilisk's `src/COPYING` (GPLv3). |
 | D2 | Hosting | **Decided and done:** public GitHub repository, https://github.com/Riccaraccio/basilisk-editor |
 | D3 | Name and IDs | **Postponed:** there is no publisher ID yet. Until there is one, the `.vsix` is distributed as a release download; marketplace publishing (part of Phase 3, step 6) waits. The repository name stays `basilisk-editor`. |
-| D4 | Default diagnostics mode | **Decided: `onSave`** by default; `onChange` is opt-in (in the project file or editor settings). This is the safer default on shared machines and cluster login nodes. Implemented in Phase 1. |
+| D4 | Default diagnostics mode | **Decided: `onChange`** (check while typing), changed from `onSave` on 2026-11-24 at the maintainer's request. `onSave` stays available for busy shared machines (project file or editor settings). |
 | D5 | Upstream | Open. Once it has had a beta, consider proposing it to Basilisk's maintainers (a link from basilisk.fr, or shipping it next to `basilisk-mode.el`). |
 
 ## The plan
@@ -112,7 +112,7 @@ Each phase ends in a state that could be shared. Phases 1–3 are needed before 
    - B5: a portable `bin/basilisk-lsp` without `readlink -f`.
    - B6: rename the setting to `basilisk.path` (`basiliskPath` in the server).
 6. **One version number** in the server, which `vscode/package.json` is checked against in CI.
-7. **Apply decision D4**: the default diagnostics mode.
+7. **Apply decision D4**: the default diagnostics mode (originally `onSave`; switched to `onChange` during Phase 2).
 
 **Done when:** a fresh user account with only `python3` and Basilisk can:
 - in vim and neovim (vim-plug, lazy.nvim and native `pack/`), get highlighting, diagnostics and completion using **only** the plugin-manager line;
@@ -136,13 +136,27 @@ New tests: `tests/test_config.py` (9 unit tests: precedence, project files, disc
 - The VS Code extension has been rebuilt and installed but not yet watched running in the editor.
 - The version check runs when the `.vsix` is built; making CI run it belongs to Phase 3.
 
-### Phase 2: one source for language knowledge *(fixes C)*
+### Phase 2: one source for language knowledge *(fixes C; done)*
 
 1. `spec/language.json` becomes the single list of keywords, loops, types, qualifiers, built-in variables and functions, boundary names, and their hover documentation. It also holds the file-detection markers.
 2. `tools/generate.py` writes the generated parts of: the vim syntax file, the nano rc, the VS Code injection grammar, the Emacs font-lock keywords, the server's `BUILTINS`, and the three detection regexes (vim ftdetect, `extension.js` and `basilisk-editor.el`). Generated blocks are fenced with `GENERATED … END GENERATED` markers.
 3. CI fails if the generated files are out of date (`tools/generate.py --check`).
 
 **Done when:** adding a new `foreach_*` loop takes one edit plus `generate.py`.
+
+**Status (2026-11-24): done.**
+- `spec/language.json` holds the highlight word lists, the detection rules, and the 52 built-in docs and 10 snippets (extracted from the server, not retyped).
+- `tools/generate.py` writes them into six text files and the VS Code grammar.
+- Demonstrated: adding one word to the spec and running the generator updated the vim, nano, VS Code and Emacs highlighting; `--check` flagged the stale files first.
+- `tests/test_generate.py` checks that the generated files are up to date, and that the three detection regexes (vim, JavaScript, Emacs) agree on 20 sample lines, each in its real engine.
+- Editor highlighting re-checked after the switch: vim, nano, VS Code (vscode-textmate) and Emacs.
+- Drift it removed:
+  - `level` is now highlighted everywhere (VS Code and Emacs lacked it);
+  - nano now highlights `nodata`;
+  - nano no longer colours `first`/`last` everywhere (it can't restrict them to `event` lines);
+  - Emacs/VS Code/vim detection share one header list.
+- Also changed: the default diagnostics mode is now `onChange` (see D4).
+- CI running `--check` is part of Phase 3.
 
 ### Phase 3: tests and CI *(fixes D)*
 

@@ -61,7 +61,7 @@ What you get:
 
 Options (`M-x customize-group RET basilisk`):
 - `basilisk-auto-lsp`: `eglot` (default), `lsp-mode` or `nil`.
-- `basilisk-lsp-options`: e.g. `(:diagnostics "onChange")`.
+- `basilisk-lsp-options`: e.g. `(:diagnostics "onSave")`.
 
 Basilisk's own `basilisk-mode.el`, which shows the literate comments as markdown, also works with the language server: run `M-x eglot` in it.
 
@@ -87,7 +87,7 @@ Settings live in **one file per project**, `.basilisk-lsp.json`, and every edito
 {
   "qccFlags": ["-Wall", "-grid=octree"],
   "includeDirs": ["../common"],
-  "diagnostics": "onChange"
+  "diagnostics": "onSave"
 }
 ```
 
@@ -95,7 +95,7 @@ Settings live in **one file per project**, `.basilisk-lsp.json`, and every edito
 |---|---|---|
 | `qccFlags` | `["-Wall"]` | qcc flags used for checking, e.g. `-grid=octree`, `-DMY_OPTION`, `-I../include` |
 | `includeDirs` | `[]` | extra include directories, also used for completion and go-to-definition |
-| `diagnostics` | `"onSave"` | `"onSave"`, `"onChange"` (check while typing; each check costs about 2 s of CPU) or `"off"` |
+| `diagnostics` | `"onChange"` | `"onChange"` (check while typing), `"onSave"` or `"off"`. Each check costs about 2 s of CPU, so `"onSave"` is kinder to busy shared machines. |
 | `debounce` | `1.0` | seconds to wait after typing before checking, with `onChange` |
 | `basiliskPath` | auto | Basilisk's `src/` directory; see below |
 | `qcc` | `qcc` | qcc executable |
@@ -103,10 +103,10 @@ Settings live in **one file per project**, `.basilisk-lsp.json`, and every edito
 Relative paths in the project file are relative to the file itself.
 
 The same settings can also be given in the editor, where the project file takes precedence:
-- **neovim:** `vim.g.basilisk_lsp_options = { diagnostics = "onChange" }`
+- **neovim:** `vim.g.basilisk_lsp_options = { diagnostics = "onSave" }`
 - **vim-lsp:** `g:basilisk_lsp_options`
 - **VS Code:** `basilisk.*` settings, with `basilisk.path` for `basiliskPath`
-- **Emacs:** `basilisk-lsp-options`, e.g. `(:diagnostics "onChange")`
+- **Emacs:** `basilisk-lsp-options`, e.g. `(:diagnostics "onSave")`
 
 **Finding Basilisk.** The server tries, in order: `basiliskPath`, then `$BASILISK`, then the directory of `qcc` on `PATH`, then common locations (`~/basilisk/src`, `~/basilisk/basilisk/src`, `/usr/local/basilisk/src`, `/opt/basilisk/src`). qcc doesn't have to be on `PATH` if it is in that directory. Editors started from a desktop menu often don't see your shell's `$BASILISK`; set `basiliskPath` if Basilisk isn't found.
 
@@ -141,7 +141,7 @@ Basilisk sources are ordinary `.c`/`.h` files, so vim, Emacs and VS Code recogni
 |---|---|
 | "cannot find Basilisk (tried: …)" | Set `basiliskPath` in `.basilisk-lsp.json`, or set `$BASILISK` for the editor. |
 | Errors only in 3D cases (or other grids) | Add `-grid=octree` (etc.) to `qccFlags`, or `#include "grid/octree.h"` in the case. |
-| No errors while typing | That's the default (`onSave`); set `"diagnostics": "onChange"`. |
+| Checking slows down a shared machine | Set `"diagnostics": "onSave"` (or `"off"`). |
 | A header shows a single "does not compile on its own" note | Open, or create in the same directory, a `.c` file that includes it. |
 | Lazy.nvim: nothing happens | Use the plugin spec above; `pack/` directories are ignored by lazy.nvim. |
 
@@ -150,14 +150,19 @@ Basilisk sources are ordinary `.c`/`.h` files, so vim, Emacs and VS Code recogni
 ```
 plugin/ ftdetect/ syntax/ ftplugin/ indent/ compiler/   vim/neovim plugin
 basilisk-editor.el         Emacs package
+spec/language.json         single source of keywords, file detection, built-in docs
+tools/generate.py          writes them into the editor files (--check: verify)
 bin/basilisk-lsp           launcher (POSIX sh)
 server/basilisk_lsp.py     language server, --lint, --config
 nano/basilisk.nanorc
 vscode/                    extension; build.sh builds the .vsix (no Node 20 needed)
 tests/                     python3 tests/test_config.py   (unit tests, no qcc needed)
+                           python3 tests/test_generate.py (generated files, detection in vim/node/emacs)
                            python3 tests/test_lsp.py      (end-to-end, needs Basilisk)
 install.sh                 optional installer (bin, vim, nvim, nano, vscode)
 ```
+
+To add or change a keyword, built-in or its documentation, edit `spec/language.json` and run `python3 tools/generate.py`. Don't edit the `GENERATED … END GENERATED` blocks by hand.
 
 See [PLAN.md](PLAN.md) for the roadmap.
 

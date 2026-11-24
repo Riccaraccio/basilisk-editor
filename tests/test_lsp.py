@@ -158,26 +158,26 @@ it = c.request("completionItem/resolve", statsf)
 check("resolve uses the item's own document (B1)",
       "utils.h" in it.get("documentation", {}).get("value", ""), it)
 
-# default diagnostics mode is onSave: typing alone does not run qcc
+# default diagnostics mode is onChange: typing alone runs qcc (no save)
 c.notify("textDocument/didChange", {"textDocument": {"uri": uri, "version": 5},
                                     "contentChanges": [{"text": SRC + "oops\n"}]})
-check("onSave default: no check while typing", diags_for(c, 5, 4) is None)
-c.notify("textDocument/didSave", {"textDocument": {"uri": uri}})
 dg = diags_for(c, 5, 60)
-check("onSave default: checked on save", bool(dg) and any(x["severity"] == 1 for x in dg), dg)
+check("onChange default: checked while typing", bool(dg) and any(x["severity"] == 1 for x in dg), dg)
 c.request("shutdown", None); c.notify("exit", None)
 
-# a client asking for onChange gets diagnostics while typing
+# a client asking for onSave: typing alone does not run qcc, saving does
 c2 = Client()
 c2.pending = []
 c2.request("initialize", {"processId": None, "rootUri": None, "capabilities": {},
-                          "initializationOptions": {"diagnostics": "onChange", "debounce": 0.2}})
+                          "initializationOptions": {"diagnostics": "onSave", "debounce": 0.2}})
 c2.notify("initialized", {})
 c2.notify("textDocument/didOpen", {"textDocument": {"uri": uri, "languageId": "basilisk", "version": 1, "text": SRC}})
 c2.notify("textDocument/didChange", {"textDocument": {"uri": uri, "version": 2},
                                      "contentChanges": [{"text": SRC + "oops\n"}]})
+check("onSave setting: no check while typing", diags_for(c2, 2, 4) is None)
+c2.notify("textDocument/didSave", {"textDocument": {"uri": uri}})
 dg = diags_for(c2, 2, 60)
-check("onChange setting: checked while typing", bool(dg) and any(x["severity"] == 1 for x in dg), dg)
+check("onSave setting: checked on save", bool(dg) and any(x["severity"] == 1 for x in dg), dg)
 c2.request("shutdown", None); c2.notify("exit", None)
 print("FAILURES:", fails)
 sys.exit(1 if fails else 0)

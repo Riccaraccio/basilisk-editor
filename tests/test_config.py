@@ -29,19 +29,19 @@ class Config(unittest.TestCase):
 
     def test_defaults(self):
         cfg = b.resolve_config({"basiliskPath": self.root}, self.src)
-        self.assertEqual(cfg["diagnostics"], "onSave")
+        self.assertEqual(cfg["diagnostics"], "onChange")
         self.assertEqual(cfg["flags"], ["-Wall"])
         self.assertEqual(cfg["root"], self.root)
 
     def test_precedence_and_paths(self):
         # editor settings < project file; project paths relative to the project file
         p = self.project({"qccFlags": ["-grid=octree", "-Iinc"], "includeDirs": ["../shared"],
-                          "diagnostics": "onChange"})
+                          "diagnostics": "onSave"})
         cfg = b.resolve_config({"basiliskPath": self.root, "qccFlags": ["-O2"],
                                 "diagnostics": "off", "debounce": 3}, self.src)
         proj_dir = os.path.dirname(p)
         self.assertEqual(cfg["project"], p)
-        self.assertEqual(cfg["diagnostics"], "onChange")
+        self.assertEqual(cfg["diagnostics"], "onSave")
         self.assertEqual(cfg["debounce"], 3)            # editor setting kept
         self.assertIn("-grid=octree", cfg["flags"])
         self.assertNotIn("-O2", cfg["flags"])            # replaced, not merged

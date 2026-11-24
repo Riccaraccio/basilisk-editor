@@ -2,45 +2,131 @@
   "scopeName": "basilisk.injection",
   "injectionSelector": "L:source.basilisk -comment -string",
   "patterns": [
-    { "include": "#doc" },
-    { "include": "#event" },
-    { "include": "#keywords" }
+    {
+      "include": "#doc"
+    },
+    {
+      "include": "#event"
+    },
+    {
+      "include": "#keywords"
+    }
   ],
   "repository": {
     "doc": {
       "name": "comment.block.documentation.basilisk",
       "begin": "/\\*\\*(?!/)",
       "end": "\\*/",
-      "beginCaptures": { "0": { "name": "punctuation.definition.comment.begin.basilisk" } },
-      "endCaptures": { "0": { "name": "punctuation.definition.comment.end.basilisk" } },
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.begin.basilisk"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.end.basilisk"
+        }
+      },
       "patterns": [
-        { "name": "markup.raw.block.basilisk", "begin": "^\\s*(~~~|```).*$", "end": "^\\s*(~~~|```)\\s*$|(?=\\*/)" },
-        { "match": "^\\s*(#{1,6})\\s+(.*)$", "name": "markup.heading.basilisk",
-          "captures": { "1": { "name": "punctuation.definition.heading.markdown" }, "2": { "name": "entity.name.section.markdown" } } },
-        { "match": "\\*\\*[^*]+\\*\\*", "name": "markup.bold.basilisk" },
-        { "match": "(?<![*\\w])\\*(?![\\s*/])[^*]+\\*(?![*/])", "name": "markup.italic.basilisk" },
-        { "match": "`[^`]+`", "name": "markup.inline.raw.basilisk" },
-        { "match": "\\$\\$?[^$]+\\$\\$?", "name": "markup.math.inline.basilisk string.other.math.basilisk" },
-        { "match": "(\\[)([^\\]]+)(\\])\\(([^)]+)\\)",
-          "captures": { "2": { "name": "string.other.link.title.markdown" }, "4": { "name": "markup.underline.link.markdown" } } }
+        {
+          "name": "markup.raw.block.basilisk",
+          "begin": "^\\s*(~~~|```).*$",
+          "end": "^\\s*(~~~|```)\\s*$|(?=\\*/)"
+        },
+        {
+          "match": "^\\s*(#{1,6})\\s+(.*)$",
+          "name": "markup.heading.basilisk",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.heading.markdown"
+            },
+            "2": {
+              "name": "entity.name.section.markdown"
+            }
+          }
+        },
+        {
+          "match": "\\*\\*[^*]+\\*\\*",
+          "name": "markup.bold.basilisk"
+        },
+        {
+          "match": "(?<![*\\w])\\*(?![\\s*/])[^*]+\\*(?![*/])",
+          "name": "markup.italic.basilisk"
+        },
+        {
+          "match": "`[^`]+`",
+          "name": "markup.inline.raw.basilisk"
+        },
+        {
+          "match": "\\$\\$?[^$]+\\$\\$?",
+          "name": "markup.math.inline.basilisk string.other.math.basilisk"
+        },
+        {
+          "match": "(\\[)([^\\]]+)(\\])\\(([^)]+)\\)",
+          "captures": {
+            "2": {
+              "name": "string.other.link.title.markdown"
+            },
+            "4": {
+              "name": "markup.underline.link.markdown"
+            }
+          }
+        }
       ]
     },
     "event": {
       "match": "^(event)\\s+([A-Za-z_]\\w*)",
-      "captures": { "1": { "name": "keyword.control.event.basilisk" }, "2": { "name": "entity.name.function.event.basilisk" } }
+      "captures": {
+        "1": {
+          "name": "keyword.control.event.basilisk"
+        },
+        "2": {
+          "name": "entity.name.function.event.basilisk"
+        }
+      }
     },
     "keywords": {
       "patterns": [
-        { "match": "\\b(foreach(?:_\\w+)?)\\b", "name": "keyword.control.loop.basilisk" },
-        { "match": "\\b(reduction)\\b", "name": "keyword.control.basilisk" },
-        { "match": "\\b(scalar|vector|tensor|coord|Point)\\b", "name": "storage.type.basilisk" },
-        { "match": "\\b(face|vertex|symmetric|trace|macro)\\b|\\(const\\)", "name": "storage.modifier.basilisk" },
-        { "match": "\\b(new|delete)\\b", "name": "keyword.operator.new.basilisk" },
-        { "match": "\\b(Delta|point|dimension)\\b", "name": "variable.language.basilisk" },
-        { "match": "\\b(left|right|top|bottom|front|back|nodata)\\b", "name": "constant.language.basilisk" },
-        { "match": "\\b(dirichlet|neumann|dirichlet_homogeneous|neumann_homogeneous|periodic|val|fine|coarse|neighbor)\\b(?=\\s*\\()", "name": "support.function.basilisk" },
-        { "match": "(?<=[\\w\\]])\\.(x|y|z|n|t)\\b", "name": "variable.other.member.component.basilisk" },
-        { "match": "\\[\\]", "name": "punctuation.stencil.basilisk keyword.operator.stencil.basilisk" }
+        {
+          "match": "\\b(foreach|foreach_\\w+)\\b",
+          "name": "keyword.control.loop.basilisk"
+        },
+        {
+          "match": "\\b(event|reduction)\\b",
+          "name": "keyword.control.basilisk"
+        },
+        {
+          "match": "\\b(scalar|vector|tensor|coord|Point)\\b",
+          "name": "storage.type.basilisk"
+        },
+        {
+          "match": "\\b(face|vertex|symmetric|trace|macro)\\b|\\(const\\)",
+          "name": "storage.modifier.basilisk"
+        },
+        {
+          "match": "\\b(new|delete)\\b",
+          "name": "keyword.operator.new.basilisk"
+        },
+        {
+          "match": "\\b(Delta|point|level|dimension)\\b",
+          "name": "variable.language.basilisk"
+        },
+        {
+          "match": "\\b(left|right|top|bottom|front|back|nodata)\\b",
+          "name": "constant.language.basilisk"
+        },
+        {
+          "match": "\\b(dirichlet|neumann|dirichlet_homogeneous|neumann_homogeneous|periodic|val|fine|coarse|neighbor)\\b(?=\\s*\\()",
+          "name": "support.function.basilisk"
+        },
+        {
+          "match": "(?<=[\\w\\]])\\.(x|y|z|n|t)\\b",
+          "name": "variable.other.member.component.basilisk"
+        },
+        {
+          "match": "\\[\\]",
+          "name": "punctuation.stencil.basilisk keyword.operator.stencil.basilisk"
+        }
       ]
     }
   }

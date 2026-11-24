@@ -95,12 +95,12 @@
         "basilisk.diagnostics": {
           "type": "string",
           "enum": [
-            "onSave",
             "onChange",
+            "onSave",
             "off"
           ],
-          "default": "onSave",
-          "description": "When to run qcc for diagnostics. qcc takes ~2 s of CPU per check, so onChange is opt-in."
+          "default": "onChange",
+          "description": "When to run qcc for diagnostics: while typing (after `basilisk.debounce` seconds), on save, or never. Each check costs ~2 s of CPU; use onSave on busy shared machines."
         },
         "basilisk.debounce": {
           "type": "number",
