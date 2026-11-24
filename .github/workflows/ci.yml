@@ -84,21 +84,35 @@ jobs:
         with:
           path: ~/basilisk
           key: basilisk-${{ runner.os }}-${{ steps.week.outputs.week }}
-      - name: Build Basilisk (qcc)
+      - name: Download Basilisk
+        id: fetch
         if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          # basilisk.fr does not accept connections from GitHub's runners:
+          # set the repository variable BASILISK_TARBALL_URL to a copy of
+          # https://basilisk.fr/basilisk/basilisk.tar.gz reachable from them.
+          MIRROR: ${{ vars.BASILISK_TARBALL_URL }}
         run: |
           cd ~
-          # retries, IPv4 first (some runners have broken IPv6), errors shown
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 --connect-timeout 30 -4 \
-               -o basilisk.tar.gz https://basilisk.fr/basilisk/basilisk.tar.gz \
-            || curl -fSL --retry 3 --retry-delay 10 --connect-timeout 30 -v \
-               -o basilisk.tar.gz https://basilisk.fr/basilisk/basilisk.tar.gz
+          for url in $MIRROR https://basilisk.fr/basilisk/basilisk.tar.gz; do
+            echo "trying $url"
+            if curl -fsSL --retry 2 --retry-delay 5 --connect-timeout 20 -o basilisk.tar.gz "$url"; then
+              echo "ok=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+          done
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+          echo "::warning title=Basilisk unavailable::Could not download Basilisk (basilisk.fr refuses GitHub's runners; set the BASILISK_TARBALL_URL repository variable). The tests needing qcc were skipped."
+      - name: Build Basilisk (qcc)
+        if: steps.fetch.outputs.ok == 'true'
+        run: |
+          cd ~
           tar xzf basilisk.tar.gz
           cd basilisk/src
           ln -s config.gcc config
           make ast        # qcc's parser library (built by `make all` via subdirs)
           make qcc
       - name: Basilisk environment
+        if: steps.cache.outputs.cache-hit == 'true' || steps.fetch.outputs.ok == 'true'
         run: |
           echo "BASILISK=$HOME/basilisk/src" >> "$GITHUB_ENV"
           echo "$HOME/basilisk/src" >> "$GITHUB_PATH"
@@ -107,9 +121,32 @@ jobs:
           BASILISK_LSP_SLOW: "1"
         run: python3 -m unittest discover -s tests -v
       - name: Recorded qcc outputs still match this Basilisk
+        if: env.BASILISK != ''
         # informative: when qcc's messages change upstream, re-record with
         # tests/record_fixtures.py and review the expected.json changes
         continue-on-error: true
         run: |
           python3 tests/record_fixtures.py
           git diff --stat --exit-code tests/fixtures
+
+  # The VS Code extension builds with the official packager (as on release).
+  vsix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build the extension
+        working-directory: vscode
+        run: |
+          mkdir -p server
+          cp ../server/basilisk_lsp.py server/
+          cp ../LICENSE .
+          npm ci --omit=dev
+          npx --yes @vscode/vsce@3 package
+          unzip -l basilisk-c-*.vsix | grep -E 'extension/(server/basilisk_lsp.py|extension.js|LICENSE|node_modules/vscode-languageclient/package.json)'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: basilisk-c-vsix
+          path: vscode/basilisk-c-*.vsix
