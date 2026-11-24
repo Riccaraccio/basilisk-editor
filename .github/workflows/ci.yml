@@ -88,7 +88,11 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           cd ~
-          wget -q https://basilisk.fr/basilisk/basilisk.tar.gz
+          # retries, IPv4 first (some runners have broken IPv6), errors shown
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 --connect-timeout 30 -4 \
+               -o basilisk.tar.gz https://basilisk.fr/basilisk/basilisk.tar.gz \
+            || curl -fSL --retry 3 --retry-delay 10 --connect-timeout 30 -v \
+               -o basilisk.tar.gz https://basilisk.fr/basilisk/basilisk.tar.gz
           tar xzf basilisk.tar.gz
           cd basilisk/src
           ln -s config.gcc config
