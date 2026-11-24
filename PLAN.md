@@ -233,7 +233,9 @@ New tests: `tests/test_config.py` (9 unit tests: precedence, project files, disc
 ### Phase 5: beta with real users, then announce
 
 1. Two or three Basilisk users, covering Linux, macOS, WSL and at least one cluster login node. Fix what they find.
-2. Tag 0.1.0, publish the extension, announce on the Basilisk mailing list, and contact the maintainers (D5).
+2. Publish the extension (D3), announce on the Basilisk mailing list, and contact the maintainers (D5).
+
+**Status (2026-11-24):** 0.1.0 was tagged before the beta, at the maintainer's request. The release workflow attaches the `.vsix` to the GitHub release. Beta feedback goes into 0.1.x / 0.2.0.
 
 ### Phase 6: features after release
 

@@ -4,7 +4,9 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-First version, to be released as 0.1.0.
+## [0.1.0] - 2026-11-24
+
+First version.
 
 ### Language server (`bin/basilisk-lsp`)
 - Diagnostics from `qcc -fsyntax-only`, on the unsaved buffer, while typing (`onChange`, default), on save, or off.
@@ -30,4 +32,5 @@ First version, to be released as 0.1.0.
 - `spec/language.json` is the single source of keywords, file detection and built-in documentation, generated into every editor's files by `tools/generate.py`.
 - Test suite, with CI on Python 3.8/3.13, Linux and macOS, neovim 0.11/stable, and the official VS Code packager. Release workflow for `v*` tags.
 
-[Unreleased]: https://github.com/Riccaraccio/basilisk-editor/commits/main
+[Unreleased]: https://github.com/Riccaraccio/basilisk-editor/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Riccaraccio/basilisk-editor/releases/tag/v0.1.0
