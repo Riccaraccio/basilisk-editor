@@ -122,6 +122,11 @@
           },
           "default": [],
           "description": "Extra include directories (-I)."
+        },
+        "basilisk.useMakefile": {
+          "type": "boolean",
+          "default": true,
+          "description": "Also use the -I, -D, -U, -grid= and -disable-dimensions flags from CFLAGS in the Makefile next to the file."
         }
       }
     }

@@ -30,6 +30,7 @@ upwards. See README.md.
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -47,8 +48,10 @@ DEFAULTS = {
     "diagnostics": "onChange", # "onChange" | "onSave" | "off"
     "debounce": 1.0,           # seconds, for onChange
     "basiliskPath": None,      # Basilisk's src/ directory ($BASILISK)
+    "useMakefile": True,       # also use -I/-D/-U/-grid= from CFLAGS in the case's Makefile
 }
 PROJECT_FILE = ".basilisk-lsp.json"
+MAKEFILES = ["GNUmakefile", "makefile", "Makefile"]   # GNU make's search order
 # where Basilisk usually lives when neither $BASILISK nor qcc's PATH say
 COMMON_ROOTS = ["~/basilisk/src", "~/basilisk/basilisk/src", "~/src/basilisk/src",
                 "/usr/local/basilisk/src", "/opt/basilisk/src"]
@@ -143,6 +146,159 @@ def find_basilisk(cfg):
     return None, tried
 
 
+MAKE_ASSIGN = re.compile(r"^(?:override\s+)?(?:export\s+)?([A-Za-z_][\w.]*)\s*(\+=|::=|:=|\?=|=)\s*(.*)$")
+MAKE_REF = re.compile(r"\$(?:\(([^()$]*)\)|\{([^{}$]*)\})")
+# words, keeping an unexpanded $(shell a b) and quoted strings in one piece
+MAKE_WORD = re.compile(r"""(?:\\.|\$\([^()]*\)|\$\{[^{}]*\}|'[^']*'?|"(?:\\.|[^"\\])*"?|\S)+""")
+MAKE_DEFINE = re.compile(r"^(?:(?:override|export)\s+)*define\b")
+MAKE_SELF = re.compile(r"\$(?:\(\s*CFLAGS\s*\)|\{\s*CFLAGS\s*\})")
+MAKE_COND = re.compile(r"^(ifdef|ifndef|ifeq|ifneq|endif)\b")
+_makefile_cache = {}
+
+
+def find_makefile(d):
+    for name in MAKEFILES:
+        f = os.path.join(d, name)
+        if os.path.isfile(f):
+            return f
+    return None
+
+
+def makefile_lines(text):
+    """Logical lines of a Makefile: continuations joined, comments removed,
+    recipe lines (starting with a tab, with their continuations) and
+    `define ... endef` blocks dropped."""
+    out, cur = [], ""
+    recipe = define = False
+    for raw in text.split("\n"):
+        if recipe or (not cur and raw.startswith("\t")):
+            recipe = raw.endswith("\\")
+            continue
+        if raw.endswith("\\"):
+            cur += raw[:-1] + " "
+            continue
+        line = re.sub(r"(?<!\\)#.*", "", cur + raw).strip()
+        cur = ""
+        if define:
+            define = not re.match(r"endef\b", line)
+        elif MAKE_DEFINE.match(line):
+            define = True
+        elif line:
+            out.append(line)
+    return out
+
+
+def shell_word(w):
+    """`w` as the shell would pass it to qcc (quotes removed), or None if it
+    isn't exactly one word."""
+    if "$" in w or not any(c in w for c in "'\"\\"):
+        return w
+    try:
+        ws = shlex.split(w)
+    except ValueError:
+        return None
+    return ws[0] if len(ws) == 1 else None
+
+
+def makefile_flags(makefile, root):
+    """The qcc flags that matter for checking, from the CFLAGS assignments of
+    `makefile` (the Basilisk convention: `CFLAGS += -I... -grid=...` before or
+    after `include $(BASILISK)/Makefile.defs`). The file is read, never run:
+    running make would regenerate Makefile.tests/Makefile.deps.
+
+    Returns (flags, skipped): `skipped` lists flags that were left out: those
+    that couldn't be expanded (an unknown variable, a $(shell ...)) and those
+    set inside ifdef/ifeq blocks, which aren't evaluated. Target-specific
+    assignments (`%.3D.s: CFLAGS += ...`) don't apply to the case itself and
+    are ignored."""
+    try:
+        mt = os.stat(makefile).st_mtime
+    except OSError:
+        return [], []
+    key = (makefile, root)
+    c = _makefile_cache.get(key)
+    if c and c[0] == mt:
+        return c[1], c[2]
+    try:
+        with open(makefile, encoding="utf-8", errors="replace") as fp:
+            text = fp.read()
+    except OSError:
+        return [], []
+    base = os.path.dirname(os.path.abspath(makefile))
+    env = dict(os.environ, CURDIR=base)   # make runs in the case's directory
+    if root:
+        env["BASILISK"] = root
+    defs, cflags, cond_cflags = {}, [], []
+    uncertain = set()   # variables set inside a conditional
+    depth = 0
+    for line in makefile_lines(text):
+        m = MAKE_COND.match(line)
+        if m:
+            depth = max(depth - 1, 0) if m.group(1) == "endif" else depth + 1
+            continue
+        m = MAKE_ASSIGN.match(line)
+        if not m:
+            continue
+        name, op, value = m.groups()
+        if name == "CFLAGS":
+            if depth:
+                cond_cflags.append(MAKE_SELF.sub("", value))
+            elif op == "+=":
+                cflags.append(value)
+            elif op != "?=" or not cflags:
+                # CFLAGS := $(CFLAGS) ... keeps the flags set so far
+                cur = " ".join(cflags)
+                cflags = [MAKE_SELF.sub(lambda m: cur, value)]
+        elif depth:
+            uncertain.add(name)
+        elif op == "+=":
+            defs[name] = (defs.get(name, env.get(name, "")) + " " + value).strip()
+        elif op != "?=" or name not in defs:
+            defs[name] = value
+
+    def expand(s, depth=0):
+        def sub(m):
+            name = (m.group(1) if m.group(1) is not None else m.group(2)).strip()
+            if name in uncertain:
+                return m.group(0)
+            if depth < 10 and name in defs:
+                return expand(defs[name], depth + 1)
+            if name in env:
+                return env[name]
+            return m.group(0)
+        return MAKE_REF.sub(sub, s.replace("$$", "\0")).replace("\0", "$")
+
+    def select(values):
+        """(flags, unusable) among the words of the CFLAGS `values`."""
+        words = MAKE_WORD.findall(expand(" ".join(values)))
+        out, bad = [], []
+        i = 0
+        while i < len(words):
+            w = words[i]
+            i += 1
+            if w in ("-I", "-D", "-U") and i < len(words):  # "-I dir"
+                w += words[i]
+                i += 1
+            u = shell_word(w)
+            if u is not None:
+                w = u
+            if not (w.startswith(("-I", "-D", "-U", "-grid=")) or w == "-disable-dimensions"):
+                continue
+            if u is None or "$" in w:
+                bad.append(w)
+                continue
+            if w.startswith("-I"):
+                w = "-I" + os.path.normpath(os.path.join(base, os.path.expanduser(w[2:])))
+            out.append(w)
+        return out, bad
+
+    flags, skipped = select(cflags)
+    in_cond, bad = select(cond_cflags)
+    skipped += bad + in_cond
+    _makefile_cache[key] = (mt, flags, skipped)
+    return flags, skipped
+
+
 def resolve_config(settings, path):
     """Effective configuration for file `path`, given the editor `settings`."""
     cfg = dict(DEFAULTS)
@@ -162,7 +318,14 @@ def resolve_config(settings, path):
     if not qcc and root and os.path.isfile(os.path.join(root, "qcc")):
         qcc = os.path.join(root, "qcc")
     cfg["qccExe"] = qcc
-    flags = list(cfg.get("qccFlags") or [])
+    # Makefile flags first, so that qccFlags (e.g. a -grid=) win over them
+    mk = find_makefile(doc_dir) if cfg.get("useMakefile") else None
+    mk_flags, mk_skipped = makefile_flags(mk, root) if mk else ([], [])
+    cfg["makefile"] = mk
+    cfg["makefileFlags"] = mk_flags
+    if mk_skipped:
+        cfg["makefileSkipped"] = mk_skipped
+    flags = mk_flags + list(cfg.get("qccFlags") or [])
     flags += ["-I" + d for d in cfg.get("includeDirs") or []]
     cfg["flags"] = flags
     cfg["idirs"] = [f[2:] for f in flags if f.startswith("-I") and len(f) > 2]
@@ -702,9 +865,9 @@ class Index:
         implicit = ["common.h"]
         if not grid_given:
             implicit.append("grid/quadtree.h")
-        for flag in cfg["flags"]:
-            if flag.startswith("-grid="):
-                implicit.append("grid/" + flag[6:] + ".h")
+        grids = [f[6:] for f in cfg["flags"] if f.startswith("-grid=")]
+        if grids:   # qcc uses the last one
+            implicit.append("grid/" + grids[-1] + ".h")
         root = cfg["root"]
         if root:
             queue = []

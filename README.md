@@ -113,8 +113,18 @@ Settings live in **one file per project**, `.basilisk-lsp.json`, and every edito
 | `debounce` | `1.0` | seconds to wait after typing before checking, with `onChange` |
 | `basiliskPath` | auto | Basilisk's `src/` directory; see below |
 | `qcc` | `qcc` | qcc executable |
+| `useMakefile` | `true` | also use the flags from the case's `Makefile`; see below |
 
 Relative paths in the project file are relative to the file itself.
+
+**Flags from the Makefile.** A Basilisk case usually builds with a `Makefile` next to it, such as:
+
+```make
+CFLAGS += -O2 -I$(HOME)/sandbox/src -grid=octree
+include $(BASILISK)/Makefile.defs
+```
+
+The server reads the `CFLAGS` assignments of that `Makefile` (or `makefile`/`GNUmakefile`), so its headers are found without a project file. It keeps only the flags that matter for checking: `-I`, `-D`, `-U`, `-grid=` and `-disable-dimensions`. It expands `$(HOME)`, `$(BASILISK)`, `$(CURDIR)`, other environment variables and variables set in the same Makefile. Quotes are removed as the shell would. The Makefile is read, never run: target-specific lines (`%.3D.s: CFLAGS += …`), recipes and `define` blocks are ignored, and `ifdef`/`ifeq` blocks aren't evaluated, so flags set inside them aren't used. Those, and flags it can't expand, such as `$(shell …)`, are listed under `makefileSkipped` by `--config`; put the ones you need in `qccFlags`. Only the Makefile in the file's own directory is read, not one in a parent directory. `qccFlags` and `includeDirs` come after the Makefile's flags, so a `-grid=` in `qccFlags` wins. Set `"useMakefile": false` to ignore the Makefile.
 
 The same settings can also be given in the editor, where the project file takes precedence:
 - **neovim:** `vim.g.basilisk_lsp_options = { diagnostics = "onSave" }`

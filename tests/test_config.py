@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Unit tests (no qcc needed): configuration, Basilisk discovery, columns."""
-import json, os, sys, tempfile, unittest
+import json, os, re, sys, tempfile, unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "server"))
 import basilisk_lsp as b  # noqa: E402
@@ -81,6 +81,133 @@ class Config(unittest.TestCase):
             os.environ.update(old)
         self.assertIsNone(cfg["root"])
         self.assertTrue(any("cannot find Basilisk" in e and "$BASILISK" in e for e in cfg["errors"]))
+
+    def makefile(self, text, name="Makefile"):
+        with open(os.path.join(self.case, name), "w") as f:
+            f.write(text)
+
+    def test_makefile_flags(self):
+        os.environ["BLSP_TEST_SANDBOX"] = "/opt/sandbox"
+        self.addCleanup(os.environ.pop, "BLSP_TEST_SANDBOX", None)
+        self.makefile(
+            "# a case\n"
+            "SRC = $(HOME)/mysrc\n"
+            "include $(BASILISK)/Makefile.defs\n"
+            "CFLAGS += -O2 -disable-dimensions -I$(SRC) -I ${BLSP_TEST_SANDBOX}/src \\\n"
+            "          -Iinc -DNSP=3 -fopenmp -grid=octree  # trailing comment\n"
+            "CFLAGS += -I$(BASILISK)/../extra -I$(CURDIR)/cur -I$(NOPE)/x -I$(shell pwd)\n"
+            "%.3D.s: CFLAGS += -I/target/specific\n"
+            "run:\n"
+            "\tCFLAGS += -I/in/a/recipe\n")
+        cfg = b.resolve_config({"basiliskPath": self.root}, self.src)
+        home = os.path.expanduser("~")
+        self.assertEqual(cfg["makefile"], os.path.join(self.case, "Makefile"))
+        self.assertEqual(cfg["makefileFlags"], [
+            "-disable-dimensions", "-I" + os.path.join(home, "mysrc"), "-I/opt/sandbox/src",
+            "-I" + os.path.join(self.case, "inc"), "-DNSP=3", "-grid=octree",
+            "-I" + os.path.normpath(os.path.join(self.root, "../extra")),
+            "-I" + os.path.join(self.case, "cur")])
+        self.assertEqual(cfg["makefileSkipped"], ["-I$(NOPE)/x", "-I$(shell pwd)"])
+        self.assertEqual(cfg["errors"], [])          # skipped flags don't block checking
+        self.assertEqual(cfg["flags"][-1], "-Wall")  # qccFlags come after the Makefile's
+        self.assertIn("/opt/sandbox/src", cfg["idirs"])
+
+    def test_makefile_assignment_resets(self):
+        self.makefile("CFLAGS += -Iold\nCFLAGS = -Inew\nCFLAGS ?= -Iignored\n")
+        cfg = b.resolve_config({"basiliskPath": self.root}, self.src)
+        self.assertEqual(cfg["makefileFlags"], ["-I" + os.path.join(self.case, "new")])
+
+    def test_makefile_cflags_self_reference(self):
+        self.makefile("CFLAGS += -DA\n"
+                      "CFLAGS := $(CFLAGS) -DB\n"
+                      "CFLAGS = ${CFLAGS} -DC\n"
+                      "ifdef X\nCFLAGS := $(CFLAGS) -DD\nendif\n")
+        cfg = b.resolve_config({"basiliskPath": self.root}, self.src)
+        self.assertEqual(cfg["makefileFlags"], ["-DA", "-DB", "-DC"])
+        self.assertEqual(cfg["makefileSkipped"], ["-DD"])
+
+    def test_last_grid_wins_for_completion(self):
+        # qcc uses the last -grid=, so completion offers that grid's symbols only
+        for g in ("quadtree", "octree", "multigrid"):
+            fake = os.path.join(self.root, "grid", g + ".h")
+            os.makedirs(os.path.dirname(fake), exist_ok=True)
+            open(fake, "w").close()
+        self.makefile("CFLAGS += -grid=octree\n")
+        self.project({"qccFlags": ["-grid=multigrid"]})
+        cfg = b.resolve_config({"basiliskPath": self.root}, self.src)
+        self.assertEqual([f for f in cfg["flags"] if f.startswith("-grid=")],
+                         ["-grid=octree", "-grid=multigrid"])
+        files = b.Index().closure(self.src, b.scan("", self.src), cfg)
+        grids = sorted(os.path.basename(f) for f in files if os.sep + "grid" + os.sep in f)
+        self.assertEqual(grids, ["multigrid.h"])
+
+    def test_makefile_conditionals_skipped(self):
+        # ifdef/ifeq aren't evaluated: what they set is neither used nor guessed
+        self.makefile(
+            "SRC = /a\n"
+            "ifdef MPI\n"
+            "CFLAGS += -D_MPI=1\n"
+            "SRC = /b\n"
+            "else ifeq ($(X),y)\n"
+            "  ifneq (a,b)\n"
+            "  CFLAGS = -Inested\n"
+            "  endif\n"
+            "else\n"
+            "CFLAGS += -DSERIAL\n"
+            "endif\n"
+            "CFLAGS += -I$(SRC) -DAFTER\n")
+        cfg = b.resolve_config({"basiliskPath": self.root}, self.src)
+        self.assertEqual(cfg["makefileFlags"], ["-DAFTER"])
+        self.assertEqual(cfg["makefileSkipped"], [
+            "-I$(SRC)", "-D_MPI=1", "-I" + os.path.join(self.case, "nested"), "-DSERIAL"])
+
+    def test_makefile_shell_quotes(self):
+        # the shell removes the quotes before qcc sees the flags
+        self.makefile("CFLAGS += -DNAME='\"x\"' -DY=\\\"z\\\" -I\"with space\" -DBAD='open\n")
+        cfg = b.resolve_config({"basiliskPath": self.root}, self.src)
+        self.assertEqual(cfg["makefileFlags"], [
+            '-DNAME="x"', '-DY="z"', "-I" + os.path.join(self.case, "with space")])
+        self.assertEqual(cfg["makefileSkipped"], ["-DBAD='open"])
+
+    def test_makefile_recipes_and_defines_ignored(self):
+        self.makefile(
+            "run:\n"
+            "\techo a \\\n"
+            "  CFLAGS += -I/recipe/continuation\n"
+            "define BLOCK\n"
+            "CFLAGS += -I/in/define\n"
+            "endef\n"
+            "CFLAGS += -DKEPT\n")
+        cfg = b.resolve_config({"basiliskPath": self.root}, self.src)
+        self.assertEqual(cfg["makefileFlags"], ["-DKEPT"])
+
+    def test_settings_in_every_place(self):
+        # a server setting must be declared for VS Code, sent by the
+        # extension, and documented (AGENTS.md: "New settings go in DEFAULTS…")
+        root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+        with open(os.path.join(root, "vscode", "package.json")) as f:
+            props = json.load(f)["contributes"]["configuration"]["properties"]
+        with open(os.path.join(root, "vscode", "extension.js")) as f:
+            sent = re.search(r"function settings\(\) \{(.*?)\n\}", f.read(), re.S).group(1)
+        with open(os.path.join(root, "README.md")) as f:
+            readme = f.read()
+        client_only = {"autoDetect", "pythonPath"}
+        names = {"path" if k == "basiliskPath" else k: k for k in b.DEFAULTS}
+        self.assertEqual(set(props), {"basilisk." + n for n in set(names) | client_only})
+        for vs, key in names.items():
+            self.assertIn("c.get('%s')" % vs, sent, key)
+            self.assertIn("| `%s` |" % key, readme, key)
+
+    def test_makefile_off_and_absent(self):
+        cfg = b.resolve_config({"basiliskPath": self.root}, self.src)
+        self.assertIsNone(cfg["makefile"])
+        self.assertEqual(cfg["flags"], ["-Wall"])
+        self.makefile("CFLAGS += -Ifoo\n", name="makefile")
+        self.project({"useMakefile": False})
+        cfg = b.resolve_config({"basiliskPath": self.root}, self.src)
+        self.assertIsNone(cfg["makefile"])
+        self.assertEqual(cfg["flags"], ["-Wall"])
+        self.assertEqual(cfg["errors"], [])
 
     def test_editor_settings_vscode_shape(self):
         s = b.Server()

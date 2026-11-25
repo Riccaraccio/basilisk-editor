@@ -4,6 +4,9 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+- The language server uses the `-I`, `-D`, `-U`, `-grid=` and `-disable-dimensions` flags from `CFLAGS` in the case's `Makefile`, so headers from a sandbox or other include directories are found without a `.basilisk-lsp.json`. Flags inside `ifdef`/`ifeq` blocks, or that can't be expanded, are left out and shown by `--config`. New setting `useMakefile` (default `true`) turns this off.
+
 ## [0.1.0] - 2026-11-24
 
 First version.

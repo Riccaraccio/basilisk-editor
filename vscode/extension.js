@@ -26,6 +26,7 @@ function settings() {
   return {
     basiliskPath: c.get('path'), qcc: c.get('qcc'), qccFlags: c.get('qccFlags'),
     includeDirs: c.get('includeDirs'), diagnostics: c.get('diagnostics'), debounce: c.get('debounce'),
+    useMakefile: c.get('useMakefile'),
   };
 }
 
