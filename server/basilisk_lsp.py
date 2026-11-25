@@ -157,9 +157,15 @@ _makefile_cache = {}
 
 
 def find_makefile(d):
+    # by listing the directory: on a case-insensitive file system (macOS),
+    # isfile("makefile") is also true for a "Makefile"
+    try:
+        names = set(os.listdir(d))
+    except OSError:
+        return None
     for name in MAKEFILES:
         f = os.path.join(d, name)
-        if os.path.isfile(f):
+        if name in names and os.path.isfile(f):
             return f
     return None
 

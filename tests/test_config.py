@@ -82,6 +82,14 @@ class Config(unittest.TestCase):
         self.assertIsNone(cfg["root"])
         self.assertTrue(any("cannot find Basilisk" in e and "$BASILISK" in e for e in cfg["errors"]))
 
+    def fake_qcc(self):
+        # so that cfg["errors"] is empty where qcc isn't installed (CI)
+        q = os.path.join(self.root, "qcc")
+        with open(q, "w") as f:
+            f.write("#!/bin/sh\n")
+        os.chmod(q, 0o755)
+        return {"basiliskPath": self.root, "qcc": q}
+
     def makefile(self, text, name="Makefile"):
         with open(os.path.join(self.case, name), "w") as f:
             f.write(text)
@@ -99,7 +107,7 @@ class Config(unittest.TestCase):
             "%.3D.s: CFLAGS += -I/target/specific\n"
             "run:\n"
             "\tCFLAGS += -I/in/a/recipe\n")
-        cfg = b.resolve_config({"basiliskPath": self.root}, self.src)
+        cfg = b.resolve_config(self.fake_qcc(), self.src)
         home = os.path.expanduser("~")
         self.assertEqual(cfg["makefile"], os.path.join(self.case, "Makefile"))
         self.assertEqual(cfg["makefileFlags"], [
@@ -203,8 +211,11 @@ class Config(unittest.TestCase):
         self.assertIsNone(cfg["makefile"])
         self.assertEqual(cfg["flags"], ["-Wall"])
         self.makefile("CFLAGS += -Ifoo\n", name="makefile")
+        settings = self.fake_qcc()
+        cfg = b.resolve_config(settings, self.src)
+        self.assertEqual(cfg["makefile"], os.path.join(self.case, "makefile"))  # its real name
         self.project({"useMakefile": False})
-        cfg = b.resolve_config({"basiliskPath": self.root}, self.src)
+        cfg = b.resolve_config(settings, self.src)
         self.assertIsNone(cfg["makefile"])
         self.assertEqual(cfg["flags"], ["-Wall"])
         self.assertEqual(cfg["errors"], [])
