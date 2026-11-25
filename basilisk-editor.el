@@ -3,7 +3,7 @@
 ;; Copyright (C) 2026 the basilisk-editor contributors
 
 ;; URL: https://github.com/Riccaraccio/basilisk-editor
-;; Version: 0.1.0
+;; Version: 0.2.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: languages, c
 

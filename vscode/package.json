@@ -2,7 +2,7 @@
   "name": "basilisk-c",
   "displayName": "Basilisk C",
   "description": "Basilisk C (basilisk.fr) support: highlighting, qcc diagnostics, completion, hover docs, go to definition.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "local",
   "license": "GPL-3.0-or-later",
   "repository": {

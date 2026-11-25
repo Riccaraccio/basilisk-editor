@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-25
+
 ### Added
 - The language server uses the `-I`, `-D`, `-U`, `-grid=` and `-disable-dimensions` flags from `CFLAGS` in the case's `Makefile`, so headers from a sandbox or other include directories are found without a `.basilisk-lsp.json`. Flags inside `ifdef`/`ifeq` blocks, or that can't be expanded, are left out and shown by `--config`. New setting `useMakefile` (default `true`) turns this off.
 
@@ -35,5 +37,6 @@ First version.
 - `spec/language.json` is the single source of keywords, file detection and built-in documentation, generated into every editor's files by `tools/generate.py`.
 - Test suite, with CI on Python 3.8/3.13, Linux and macOS, neovim 0.11/stable, and the official VS Code packager. Release workflow for `v*` tags.
 
-[Unreleased]: https://github.com/Riccaraccio/basilisk-editor/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Riccaraccio/basilisk-editor/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Riccaraccio/basilisk-editor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Riccaraccio/basilisk-editor/releases/tag/v0.1.0

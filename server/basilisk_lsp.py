@@ -39,7 +39,7 @@ import threading
 import time
 import urllib.parse
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 DEFAULTS = {
     "qcc": "qcc",              # qcc executable (found in basiliskPath if not on PATH)
